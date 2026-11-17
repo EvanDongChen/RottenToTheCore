@@ -8,6 +8,7 @@ import { feel } from './mind'
 import { findPath } from './nav'
 import { clearLine, sees, visionRadius } from './perception'
 import type { Vec2 } from './types'
+import { thoughtFor } from './brains/dialog'
 import { viewFor } from './view'
 import { addSighting, maintainMemory } from './witness'
 
@@ -16,13 +17,17 @@ const BELIEFS_EVERY = 3
 /** A chasing or following fruit re-plans its path this often, in ticks. */
 const CHASE_REPLAN = 5
 const FOLLOW_GAP = 2.5
+/** How much faster a hurrying fruit walks. */
+export const HURRY = 1.35
 
 // ---------- Walking ----------
 
 /** Move a fruit along its path by one tick's worth of walking. */
 export function walk(game: Game, f: SimFruit) {
   const [startX, startZ] = f.pos
-  let left = WALK_SPEED * TICK
+  // In the dark the crew feel their way; a frightened fruit hurries.
+  const pace = (game.lightsOut && f.role === 'crew' && f.alive ? 0.75 : 1) * (game.time < f.hurryUntil ? HURRY : 1)
+  let left = WALK_SPEED * TICK * pace
   while (left > 0 && f.path.length) {
     const [tx, tz] = f.path[0]
     const dx = tx - f.pos[0]
@@ -39,7 +44,6 @@ export function walk(game: Game, f: SimFruit) {
     }
   }
   f.vel = [(f.pos[0] - startX) / TICK, (f.pos[1] - startZ) / TICK]
-  void game
 }
 
 /**
@@ -118,6 +122,7 @@ export function decide(game: Game, f: SimFruit) {
   if (game.time - (f.mind.beliefsAt ?? -Infinity) >= BELIEFS_EVERY) {
     f.mind.beliefs = brain.beliefs(view)
     f.mind.beliefsAt = game.time
+    f.mind.thought = thoughtFor(view, f.mind.beliefs, f.rng)
   }
   setAction(game, f, repair(game, f, brain.roam(view)))
 }
@@ -321,6 +326,7 @@ function kill(game: Game, killer: SimFruit, victim: SimFruit) {
   const body: Body = { id: victim.id, pos: victim.pos, area: victim.area, time: game.time, killer: killer.id }
   game.bodies.push(body)
   killer.killReadyAt = game.time + game.rules.killCooldown
+  killer.kills.push({ victim: victim.id, time: game.time, area: victim.area })
   killer.action = { kind: 'idle' }
   killer.decideAt = game.time
   game.stats.kills++

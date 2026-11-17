@@ -32,6 +32,8 @@ export interface Mind {
   caught: Record<string, number>
   /** Fruits it watched do a visual task: certainly crew. */
   cleared: string[]
+  /** Fruits it caught following it around. */
+  tailedBy: string[]
 }
 
 export function emptyMood(): Mood {
@@ -50,7 +52,7 @@ export function startMind(rng: Rng, others: string[]): Mind {
     else if (roll < 0.4) goal = { kind: 'revenge', target: someone }
     else if (roll < 0.6) goal = { kind: 'survive' }
   }
-  return { mood: emptyMood(), goal, beliefs: {}, thought: '', caught: {}, cleared: [] }
+  return { mood: emptyMood(), goal, beliefs: {}, thought: '', caught: {}, cleared: [], tailedBy: [] }
 }
 
 /** Feelings build up from events. */

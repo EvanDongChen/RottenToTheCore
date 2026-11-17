@@ -42,6 +42,9 @@ export function crewRoam(view: FruitView, beliefs: Record<string, number>, rng: 
   const t = view.traits
   // A body in sight: report it. A coward might run off first, but it reports in the end.
   if (view.bodies.length) {
+    // A coward runs for the button instead, which looks bad to anyone who sees it leave.
+    if (view.action.kind === 'emergency') return view.action
+    if (t.aggression < 0.25 && view.emergenciesLeft > 0 && view.mood.fear > 0.4 && rng.chance(0.5)) return { kind: 'emergency' }
     const body = view.bodies.reduce((a, b) => (dist(view.pos, a.pos) <= dist(view.pos, b.pos) ? a : b))
     return { kind: 'report', body: body.id }
   }
@@ -53,6 +56,9 @@ export function crewRoam(view: FruitView, beliefs: Record<string, number>, rng: 
   if (view.lightsOut) {
     const d = walkDistance(view.pos, FUSE_BOX)
     if (view.action.kind === 'fixSabotage' || d < 22 || t.aggression > 0.6) return { kind: 'fixSabotage' }
+    // The rest bunch up with whoever they trust nearby.
+    const near = view.visible.filter((o) => (beliefs[o.id] ?? 0.5) < 0.4).sort((a, b) => dist(view.pos, a.pos) - dist(view.pos, b.pos))[0]
+    if (near && view.mood.fear > 0.3) return { kind: 'follow', who: near.id }
   }
 
   // A suspicious fruit keeps an eye on a strong suspect it can see.

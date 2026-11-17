@@ -5,6 +5,7 @@ import { checkWin, logEvent, seatPos } from './engine'
 import type { Game, SimFruit } from './engine'
 import { round } from './log'
 import { areaAt } from './map'
+import { clearChats } from './encounters'
 import { viewFor } from './view'
 
 /**
@@ -35,6 +36,7 @@ function gather(game: Game) {
     game.public.push({ t: game.time, kind: 'dead', who: f.id })
   }
   game.bodies = []
+  clearChats(game)
 }
 
 export function meetingView(game: Game, step: MeetingView['step'], lines: MeetingView['lines'] = [], askedBy?: string): MeetingView {

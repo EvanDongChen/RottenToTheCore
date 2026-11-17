@@ -1,7 +1,8 @@
 import { decide, resolveActions, walk } from './actions'
 import { makeBrain } from './brains'
 import type { LlmOptions } from './brains/llm'
-import type { Brain, BrainKind, Claim, RoamAction } from './brains/types'
+import type { Brain, BrainKind, ChatContext, Claim, RoamAction } from './brains/types'
+import type { FruitView } from './view'
 import { BUTTON_COOLDOWN, MAX_GAME_TIME, TICK, TICKS_PER_SECOND } from './constants'
 import { encounters } from './encounters'
 import { round } from './log'
@@ -91,6 +92,10 @@ export interface SimFruit {
   /** Bodies it has found. */
   seenBodies: string[]
   diedAt: number | null
+  /** Walking faster than usual until this time (hurrying past someone it fears). */
+  hurryUntil: number
+  /** Rotten: who it killed, when and where. Its own secret. */
+  kills: { victim: string; time: number; area: string }[]
   /** Its own random stream, for memory bending and noticing. */
   rng: Rng
 }
@@ -157,6 +162,8 @@ export interface Game {
   nextId: number
   /** Called for every event as it is logged (the screen listens here). */
   onEvent?: (e: SimEvent) => void
+  /** Called when a fruit says a roaming line, so an LLM brain can reword it for the screen. */
+  onChat?: (who: string, ctx: ChatContext, view: FruitView) => void
 }
 
 export interface GameSetup {
@@ -230,6 +237,8 @@ export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Gam
       talkingTo: null,
       seenBodies: [],
       diedAt: null,
+      hurryUntil: 0,
+      kills: [],
       rng: base.fork(`fruit:${def.id}`),
     }
   })

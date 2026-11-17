@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createGame, runFor, WALK_SPEED } from '../src/sim/engine'
+import { HURRY } from '../src/sim/actions'
 import { BOUNDS, dist, TABLE } from '../src/sim/map'
 import { crossesWall } from '../src/sim/geom'
 import { WALLS } from '../src/sim/map'
@@ -40,7 +41,7 @@ describe('engine', () => {
         const at = `${f.id} at t=${game.time.toFixed(1)}`
         if (f.pos[0] < BOUNDS[0] || f.pos[0] > BOUNDS[2] || f.pos[1] < BOUNDS[1] || f.pos[1] > BOUNDS[3]) problems.push(`${at} left the lab`)
         if (dist(f.pos, TABLE.at) <= TABLE.radius) problems.push(`${at} is on the table`)
-        if (Math.hypot(f.vel[0], f.vel[1]) > WALK_SPEED + 1e-9) problems.push(`${at} is too fast`)
+        if (Math.hypot(f.vel[0], f.vel[1]) > WALK_SPEED * HURRY + 1e-9) problems.push(`${at} is too fast`)
         if (WALLS.some((w) => crossesWall(before[i], f.pos, w))) problems.push(`${at} walked through a wall`)
       })
     }

@@ -63,6 +63,10 @@ export interface FruitView {
   killReadyIn: number | null
   /** Rotten only: can it turn the lights off right now? */
   canSabotage: boolean | null
+  /** Rotten only: its own kills. Empty for crew. */
+  kills: { victim: string; time: number; area: string }[]
+  /** Fruits it caught following it around. */
+  tailedBy: string[]
   emergenciesLeft: number
   buttonReady: boolean
   lightsOut: boolean
@@ -124,6 +128,8 @@ export function viewFor(game: Game, f: SimFruit): FruitView {
     tasks: f.tasks.map((t) => ({ ...t })),
     killReadyIn: rotten ? Math.max(0, f.killReadyAt - game.time) : null,
     canSabotage: rotten ? !game.lightsOut && game.time >= game.sabotageReadyAt : null,
+    kills: rotten ? f.kills.map((k) => ({ ...k })) : [],
+    tailedBy: [...f.mind.tailedBy],
     emergenciesLeft: f.emergencies,
     buttonReady: game.time >= game.buttonReadyAt,
     lightsOut: game.lightsOut,

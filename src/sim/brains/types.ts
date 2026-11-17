@@ -60,6 +60,8 @@ export interface ChatContext {
   room?: string
   /** For `progress`: tasks left. */
   left?: number
+  /** For rumours: how sure the speaker is, 0..1. Above 0.7 it is sure; below that it hedges. */
+  confidence?: number
 }
 
 export interface ChatLine {
