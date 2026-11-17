@@ -311,6 +311,9 @@ function kill(game: Game, killer: SimFruit, victim: SimFruit) {
   const witnesses = game.fruits.filter((o) => o.alive && o !== killer && o !== victim && sees(game, o.id, killer.id) && sees(game, o.id, victim.id))
   victim.alive = false
   victim.diedAt = game.time
+  // The dead are seen by nobody from this moment, not just from the next tick.
+  for (const seen of game.vision.sees.values()) seen.delete(victim.id)
+  game.vision.sees.delete(victim.id)
   stop(victim)
   victim.busyUntil = 0
   victim.talkingTo = null

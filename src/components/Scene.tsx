@@ -7,6 +7,7 @@ import { useSim } from '../ui/store'
 import Dust from './Dust'
 import Fruit from './Fruit'
 import Stage from './Stage'
+import VisionCones from './VisionCones'
 
 /** Looking down on the lab from above and in front, like a board game on a table. */
 const CAMERA_FROM: [number, number, number] = [0, 46, 36]
@@ -39,6 +40,7 @@ export default function Scene() {
           ))}
         </Physics>
         <Dust />
+        <VisionCones />
       </Suspense>
       <OrbitControls makeDefault target={[0, 0, 0]} maxPolarAngle={Math.PI / 2.15} minDistance={6} maxDistance={90} />
     </Canvas>

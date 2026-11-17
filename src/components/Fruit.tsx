@@ -528,7 +528,14 @@ export default function Fruit({ id }: { id: string }) {
     <>
       <RigidBody ref={body} colliders={false} position={spawn} linearDamping={0.1} angularDamping={0.2}>
         <BallCollider args={[RADIUS]} friction={0.6} restitution={0.4} />
-        <group ref={visual} visible={!chop}>
+        <group
+          ref={visual}
+          visible={!chop}
+          onClick={(e) => {
+            e.stopPropagation()
+            useSim.getState().select(id)
+          }}
+        >
           <FruitBody kind={kind} />
           <FruitFace fruit={fruit} />
         </group>

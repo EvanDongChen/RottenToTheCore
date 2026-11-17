@@ -1854,3 +1854,116 @@ div.roster-row {
   -webkit-text-stroke: 1px var(--ink);
   paint-order: stroke fill;
 }
+
+/* ---------- Mind panel ---------- */
+
+.mind h3 {
+  margin: 10px 0 4px;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.mind .close {
+  margin-left: auto;
+  padding: 0 8px;
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.belief {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 6px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: #fff;
+  margin-bottom: 3px;
+  overflow: hidden;
+}
+
+.belief i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #f3b0a6;
+}
+
+.belief span,
+.belief b {
+  position: relative;
+}
+
+.belief b {
+  margin-left: auto;
+}
+
+.tasks {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.tasks li {
+  position: relative;
+}
+
+.tasks li.done {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.tasks li i {
+  display: block;
+  height: 4px;
+  background: var(--leaf);
+  border-radius: 2px;
+}
+
+.reel {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.reel li {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 4px 2px;
+  border-bottom: 1px dashed #d6c7a6;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.reel li.bent {
+  background: repeating-linear-gradient(135deg, #fff1c2 0 6px, #ffe39a 6px 12px);
+}
+
+.reel .icon {
+  flex: none;
+  width: 18px;
+  text-align: center;
+}
+
+.reel .conf {
+  margin-left: auto;
+  color: #8a7a68;
+}
+
+.reel .truth {
+  display: block;
+  color: #b2401f;
+}
+
+button.on {
+  background: var(--sun);
+}
+
+.belief span,
+.belief b {
+  z-index: 1;
+}
