@@ -1,0 +1,63 @@
+import { SPEEDS, useSim } from '../ui/store'
+import { unlockAudio } from '../ui/sfx'
+import { LOOKS, ROLE_TAG } from './fruitLooks'
+
+const PHASE_LABEL = { setup: 'Setting up', roam: 'Roaming', meeting: 'Meeting', over: 'Game over' } as const
+
+/** Sim seconds as m:ss. */
+function clock(seconds: number) {
+  const s = Math.floor(seconds)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/**
+ * The heads-up display. Milestone 1 keeps it to the essentials: phase and sim clock, pause and
+ * speed, a new seed, and the roster with roles hidden until you ask. Reworked in milestone 10.
+ */
+export default function Hud() {
+  const phase = useSim((s) => s.phase)
+  const time = useSim((s) => s.time)
+  const seed = useSim((s) => s.seed)
+  const paused = useSim((s) => s.paused)
+  const speed = useSim((s) => s.speed)
+  const revealRoles = useSim((s) => s.revealRoles)
+  const fruits = useSim((s) => s.fruits)
+  const muted = useSim((s) => s.settings.muted)
+
+  return (
+    <>
+      <header className="sign">
+        <div className="plank">
+          <span className="phase">{PHASE_LABEL[phase]}</span>
+          <span className="clock">{clock(time)}</span>
+        </div>
+        <div className="controls">
+          <button onClick={() => useSim.setState({ paused: !paused })}>{paused ? 'Resume' : 'Pause'}</button>
+          <button onClick={() => useSim.setState({ speed: SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] })}>Speed {speed}x</button>
+          <button onClick={() => useSim.setState({ revealRoles: !revealRoles })}>{revealRoles ? 'Hide roles' : 'Reveal roles'}</button>
+          <button
+            onClick={() => {
+              unlockAudio()
+              useSim.getState().setSettings({ muted: !muted })
+            }}
+          >
+            {muted ? 'Sound on' : 'Sound off'}
+          </button>
+          <button onClick={() => useSim.getState().newGame()}>New game</button>
+        </div>
+      </header>
+
+      <aside className="panel roster">
+        <h2>Fruits</h2>
+        {fruits.map((f) => (
+          <div key={f.id} className={`roster-row${f.alive ? '' : ' dead'}`}>
+            <span className="dot" style={{ background: LOOKS[f.kind].color }} />
+            <span className="who">{f.name}</span>
+            {(revealRoles || !f.alive) && <span className={`role ${f.role}`}>{ROLE_TAG[f.role]}</span>}
+          </div>
+        ))}
+        <p className="hint">Seed {seed}</p>
+      </aside>
+    </>
+  )
+}
