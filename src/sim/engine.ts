@@ -1,4 +1,6 @@
 import { round } from './log'
+import { AREAS, dist, OBSTACLE_MARGIN, OBSTACLES, randomSpot, ROOMS, SEAT_RING, STATIONS } from './map'
+import { findPath } from './nav'
 import type { SimEvent } from './log'
 import { makeRng } from './rng'
 import type { Rng } from './rng'
@@ -13,12 +15,8 @@ export const TICK = 1 / TICKS_PER_SECOND
 export const WALK_SPEED = 2.6
 /** Ticks between position frames in the log: twice per sim second. */
 const POSITION_EVERY = TICKS_PER_SECOND / 2
-const SPAWN_RING = 2.5
 const IDLE_MIN = 1
 const IDLE_MAX = 4
-
-/** Milestone 1 stand-in for the lab: one empty room. The map replaces it in milestone 2. */
-export const ROOM = { minX: -12, maxX: 12, minZ: -8, maxZ: 8 }
 
 /** A fruit in a running game. The sim owns where it is; the 3D fruit only follows. */
 export interface SimFruit {
@@ -32,6 +30,8 @@ export interface SimFruit {
   vel: Vec2
   /** Points still to walk through, in order. */
   path: Vec2[]
+  /** Which side of a doorway this fruit walks on, -1 to 1, so groups spread out. */
+  lane: number
   /** Standing still until this sim time before picking somewhere new. */
   idleUntil: number
 }
@@ -65,15 +65,15 @@ export function createGame({ seed, roster, rules }: GameSetup): Game {
   const rotten = new Set(rng.shuffle(defs.map((d) => d.id)).slice(0, fullRules.rotten))
 
   const fruits: SimFruit[] = defs.map((def, i) => {
-    const angle = (i / defs.length) * Math.PI * 2
     return {
       id: def.id,
       def,
       role: rotten.has(def.id) ? 'rotten' : 'crew',
       alive: true,
-      pos: [Math.cos(angle) * SPAWN_RING, Math.sin(angle) * SPAWN_RING],
+      pos: seatPos(i, defs.length),
       vel: [0, 0],
       path: [],
+      lane: rng.range(-1, 1),
       idleUntil: rng.range(0, IDLE_MAX),
     }
   })
@@ -94,7 +94,7 @@ export function step(game: Game) {
   if (game.phase === 'over') return
   for (const fruit of game.fruits) {
     if (!fruit.alive) continue
-    if (!fruit.path.length && game.time >= fruit.idleUntil) fruit.path = [randomSpot(game.rng)]
+    if (!fruit.path.length && game.time >= fruit.idleUntil) fruit.path = findPath(fruit.pos, somewhere(game.rng), fruit.lane)
     walk(game, fruit)
   }
   game.tick++
@@ -127,16 +127,53 @@ function walk(game: Game, fruit: SimFruit) {
         game.log.push({ t: round(game.time), kind: 'arrive', who: fruit.id, at: [round(tx), round(tz)] })
       }
     } else {
-      fruit.pos = [fruit.pos[0] + (dx / d) * left, fruit.pos[1] + (dz / d) * left]
+      fruit.pos = avoidObstacles(fruit.pos, [fruit.pos[0] + (dx / d) * left, fruit.pos[1] + (dz / d) * left], fruit.lane)
       left = 0
     }
   }
   fruit.vel = [(fruit.pos[0] - startX) / TICK, (fruit.pos[1] - startZ) / TICK]
 }
 
-function randomSpot(rng: Rng): Vec2 {
-  return [rng.range(ROOM.minX + 1, ROOM.maxX - 1), rng.range(ROOM.minZ + 1, ROOM.maxZ - 1)]
+/** Milestone 2 wandering: half the time a task station, otherwise a random spot in a random room. */
+function somewhere(rng: Rng): Vec2 {
+  return rng.chance(0.5) ? rng.pick(STATIONS).at : randomSpot(rng, rng.pick(ROOMS).id)
 }
+
+/** Seat i of n round the meeting table. */
+export function seatPos(i: number, n: number): Vec2 {
+  const angle = (i / n) * Math.PI * 2 - Math.PI / 2
+  return [Math.cos(angle) * SEAT_RING, Math.sin(angle) * SEAT_RING]
+}
+
+/**
+ * A step that would end inside an obstacle slides round its edge instead, always the same way
+ * for the same fruit, so a fruit walking straight at the table goes round it rather than stopping.
+ */
+export function avoidObstacles(from: Vec2, to: Vec2, lane: number): Vec2 {
+  for (const o of OBSTACLES) {
+    const keep = o.radius + OBSTACLE_MARGIN
+    if (dist(to, o.at) >= keep) continue
+    const rx = from[0] - o.at[0]
+    const rz = from[1] - o.at[1]
+    const r = Math.sqrt(rx * rx + rz * rz) || 1
+    const step = dist(from, to)
+    // Tangent direction, picked by which side the step was heading, or the lane when dead on.
+    const side = Math.sign(rx * (to[1] - from[1]) - rz * (to[0] - from[0])) || (lane >= 0 ? 1 : -1)
+    const tx = (-rz / r) * side
+    const tz = (rx / r) * side
+    // Stepping along the tangent from outside the rim always ends further out, so no
+    // correction is needed; only a fruit that somehow started inside is pushed back out.
+    const nx = from[0] + tx * step - o.at[0]
+    const nz = from[1] + tz * step - o.at[1]
+    const n = Math.sqrt(nx * nx + nz * nz) || 1
+    if (n >= keep) return [o.at[0] + nx, o.at[1] + nz]
+    return [o.at[0] + (nx / n) * keep, o.at[1] + (nz / n) * keep]
+  }
+  return to
+}
+
+/** Every area's id, for checks. */
+export const AREA_IDS = AREAS.map((a) => a.id)
 
 function logPositions(game: Game) {
   game.log.push({

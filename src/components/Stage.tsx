@@ -4,15 +4,13 @@ import { Grid, Html } from '@react-three/drei'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { Color, DoubleSide, MathUtils, Object3D, Vector3 } from 'three'
 import type { AmbientLight, DirectionalLight, InstancedMesh } from 'three'
-import { ROOM } from '../sim/engine'
 import { ears } from '../ui/sfx'
 import { useSim } from '../ui/store'
 import { LOOKS } from './fruitLooks'
+import LabMap from './LabMap'
 
 const DAY = new Color('#ffffff')
 const NIGHT = new Color('#1b1f2b')
-const WALL_HEIGHT = 1.2 // low, so the overhead camera sees over them
-const WALL_THICKNESS = 0.3
 
 /**
  * The whole setting, kept deliberately cheap: a blank backdrop, a grid floor, the room's
@@ -46,21 +44,21 @@ export default function Stage() {
       <ambientLight ref={ambient} intensity={1.1} />
       <directionalLight
         ref={sun}
-        position={[8, 16, 6]}
+        position={[10, 30, 8]}
         castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-16}
-        shadow-camera-right={16}
-        shadow-camera-top={16}
-        shadow-camera-bottom={-16}
-        shadow-camera-far={50}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-34}
+        shadow-camera-right={34}
+        shadow-camera-top={26}
+        shadow-camera-bottom={-26}
+        shadow-camera-far={80}
       />
 
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider args={[200, 0.5, 200]} position={[0, -0.5, 0]} />
         {/* Invisible floor that only shows the shadows cast onto it. */}
         <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[80, 80]} />
+          <planeGeometry args={[120, 120]} />
           <shadowMaterial transparent opacity={0.22} />
         </mesh>
       </RigidBody>
@@ -105,34 +103,7 @@ export default function Stage() {
         </Html>
       ))}
 
-      <RoomWalls />
-    </>
-  )
-}
-
-/**
- * Milestone 1 stand-in for the lab: four low white walls around the one room. The lab map
- * replaces this in milestone 2. Walls are drawn only; the sim, not physics, keeps fruits inside.
- */
-function RoomWalls() {
-  const w = ROOM.maxX - ROOM.minX
-  const d = ROOM.maxZ - ROOM.minZ
-  const cx = (ROOM.minX + ROOM.maxX) / 2
-  const cz = (ROOM.minZ + ROOM.maxZ) / 2
-  const sides: [number, number, number, number][] = [
-    [cx, ROOM.minZ - WALL_THICKNESS / 2, w + WALL_THICKNESS * 2, WALL_THICKNESS],
-    [cx, ROOM.maxZ + WALL_THICKNESS / 2, w + WALL_THICKNESS * 2, WALL_THICKNESS],
-    [ROOM.minX - WALL_THICKNESS / 2, cz, WALL_THICKNESS, d],
-    [ROOM.maxX + WALL_THICKNESS / 2, cz, WALL_THICKNESS, d],
-  ]
-  return (
-    <>
-      {sides.map(([x, z, sx, sz], i) => (
-        <mesh key={i} castShadow receiveShadow position={[x, WALL_HEIGHT / 2, z]}>
-          <boxGeometry args={[sx, WALL_HEIGHT, sz]} />
-          <meshStandardMaterial color="#ffffff" roughness={0.9} />
-        </mesh>
-      ))}
+      <LabMap />
     </>
   )
 }
@@ -148,7 +119,7 @@ function Confetti() {
   const pieces = useRef(
     Array.from({ length: CONFETTI_COUNT }, () => {
       const angle = Math.random() * Math.PI * 2
-      const radius = Math.sqrt(Math.random()) * 8
+      const radius = Math.sqrt(Math.random()) * 12
       return { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius, speed: 1.2 + Math.random() * 1.6, offset: Math.random() * CONFETTI_TOP, spin: 2 + Math.random() * 5 }
     }),
   )

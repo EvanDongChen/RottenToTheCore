@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createGame, ROOM, runFor, WALK_SPEED } from '../src/sim/engine'
+import { createGame, runFor, WALK_SPEED } from '../src/sim/engine'
+import { BOUNDS, dist, TABLE } from '../src/sim/map'
+import { crossesWall } from '../src/sim/geom'
+import { WALLS } from '../src/sim/map'
 import { hashLog } from '../src/sim/log'
 
 describe('engine', () => {
@@ -27,18 +30,21 @@ describe('engine', () => {
     }
   })
 
-  it('keeps fruits in the room and never faster than walking pace', () => {
+  it('keeps fruits inside the lab, off the table, out of the walls and at walking pace', () => {
     const game = createGame({ seed: 9 })
-    for (let s = 0; s < 120; s++) {
-      runFor(game, 1)
-      for (const f of game.fruits) {
-        expect(f.pos[0]).toBeGreaterThanOrEqual(ROOM.minX)
-        expect(f.pos[0]).toBeLessThanOrEqual(ROOM.maxX)
-        expect(f.pos[1]).toBeGreaterThanOrEqual(ROOM.minZ)
-        expect(f.pos[1]).toBeLessThanOrEqual(ROOM.maxZ)
-        expect(Math.hypot(f.vel[0], f.vel[1])).toBeLessThanOrEqual(WALK_SPEED + 1e-9)
-      }
+    const problems: string[] = []
+    for (let s = 0; s < 1200; s++) {
+      const before = game.fruits.map((f) => f.pos)
+      runFor(game, 0.1)
+      game.fruits.forEach((f, i) => {
+        const at = `${f.id} at t=${game.time.toFixed(1)}`
+        if (f.pos[0] < BOUNDS[0] || f.pos[0] > BOUNDS[2] || f.pos[1] < BOUNDS[1] || f.pos[1] > BOUNDS[3]) problems.push(`${at} left the lab`)
+        if (dist(f.pos, TABLE.at) <= TABLE.radius) problems.push(`${at} is on the table`)
+        if (Math.hypot(f.vel[0], f.vel[1]) > WALK_SPEED + 1e-9) problems.push(`${at} is too fast`)
+        if (WALLS.some((w) => crossesWall(before[i], f.pos, w))) problems.push(`${at} walked through a wall`)
+      })
     }
+    expect(problems).toEqual([])
     // Everyone has been somewhere by now.
     const arrivals = new Set(game.log.filter((e) => e.kind === 'arrive').map((e) => (e.kind === 'arrive' ? e.who : '')))
     expect(arrivals.size).toBe(game.fruits.length)
