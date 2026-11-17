@@ -1,0 +1,10 @@
+node_modules
+dist
+results
+*.local
+.env
+.env.*
+*.tsbuildinfo
+# The One Bad Apple source we copy from; kept beside the code, never committed.
+OneBadApple-main/
+OneBadApple-main.zip

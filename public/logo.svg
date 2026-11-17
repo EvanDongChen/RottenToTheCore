@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="One Bad Apple: a red apple with wolf ears, a scowl and two fangs">
+  <!-- wolf ears poking out from behind -->
+  <path d="M33 40 L24 10 L52 27 Z" fill="#6b5240" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M87 40 L96 10 L68 27 Z" fill="#6b5240" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M33 31 L29.500 18.500 L41 25.500 Z" fill="#f4a7a0"/>
+  <path d="M87 31 L90.500 18.500 L79 25.500 Z" fill="#f4a7a0"/>
+  <!-- apple -->
+  <path d="M60 37 C47 25 18 29 16 61 C14 93 38 113 60 105 C82 113 106 93 104 61 C102 29 73 25 60 37 Z" fill="#e2412f" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M60 105 C82 113 106 93 104 61 C103 50 99 42 93 37 C99 62 88 92 60 105 Z" fill="#b82a1f"/>
+  <path d="M60 37 C47 25 18 29 16 61 C14 93 38 113 60 105 C82 113 106 93 104 61 C102 29 73 25 60 37 Z" fill="none" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
+  <ellipse cx="33" cy="50" rx="7" ry="11" transform="rotate(28 33 50)" fill="#fff" opacity="0.4"/>
+  <!-- stem and leaf -->
+  <path d="M60 38 C60 28 62 20 68 14" fill="none" stroke="#2a1a12" stroke-width="6" stroke-linecap="round"/>
+  <path d="M66 22 C74 9 90 9 97 14 C92 27 76 31 66 22 Z" fill="#4c9a3b" stroke="#2a1a12" stroke-width="4" stroke-linejoin="round"/>
+  <!-- scowl -->
+  <path d="M33 52 L52 59" stroke="#2a1a12" stroke-width="5" stroke-linecap="round"/>
+  <path d="M87 52 L68 59" stroke="#2a1a12" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="45" cy="66" r="5" fill="#2a1a12"/>
+  <circle cx="75" cy="66" r="5" fill="#2a1a12"/>
+  <!-- grin with fangs -->
+  <path d="M40 81 Q60 99 80 81 Z" fill="#2a1a12" stroke="#2a1a12" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M46 83 L54 86 L49 94 Z" fill="#fff8e6"/>
+  <path d="M74 83 L66 86 L71 94 Z" fill="#fff8e6"/>
+</svg>
