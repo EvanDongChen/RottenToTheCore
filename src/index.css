@@ -1824,3 +1824,33 @@ div.roster-row {
   padding: 3px 6px;
   font-size: 16px;
 }
+
+.taskbar {
+  position: relative;
+  width: min(360px, 70vw);
+  height: 20px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  overflow: hidden;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.taskbar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--leaf);
+  transition: width 0.4s;
+}
+
+.taskbar span {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-family: var(--display);
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--paper);
+  -webkit-text-stroke: 1px var(--ink);
+  paint-order: stroke fill;
+}

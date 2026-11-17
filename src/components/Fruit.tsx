@@ -492,6 +492,13 @@ export default function Fruit({ id }: { id: string }) {
       const other = feet.current[1 - i]
       v.hip.set(side * HIP_SPREAD, -RADIUS * 0.75, 0).applyQuaternion(v.quat).add(v.pos)
 
+      // Teleported (a vent, or seated for a meeting): the feet jump with the body.
+      if (alive && Math.hypot(foot.pos.x - v.pos.x, foot.pos.z - v.pos.z) > 1.6) {
+        foot.pos.copy(v.pos).addScaledVector(v.right, side * FOOT_SPREAD).setY(FOOT_Y)
+        foot.from.copy(foot.pos)
+        foot.to.copy(foot.pos)
+        foot.t = 1
+      }
       if (!alive) {
         foot.pos.set(side * HIP_SPREAD * 1.4, -RADIUS - 0.4, 0).applyQuaternion(v.quat).add(v.pos)
         foot.pos.y = Math.max(FOOT_Y, foot.pos.y)

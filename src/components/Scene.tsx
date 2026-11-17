@@ -23,7 +23,8 @@ function SimClock() {
  */
 export default function Scene() {
   const seed = useSim((s) => s.seed)
-  const ids = useSim((s) => s.fruits.map((f) => f.id).join(','))
+  // Dead fruits stay where they fell until a meeting clears the bodies away.
+  const ids = useSim((s) => s.fruits.filter((f) => !s.cleared[f.id]).map((f) => f.id).join(','))
 
   return (
     // dpr is capped so high-density screens don't render four times the pixels.
@@ -33,7 +34,7 @@ export default function Scene() {
         <Physics gravity={[0, -20, 0]}>
           <Stage />
           {/* Keyed by seed too, so a new game mounts fresh fruits at their new spawn points. */}
-          {ids.split(',').map((id) => (
+          {ids.split(',').filter(Boolean).map((id) => (
             <Fruit key={`${seed}:${id}`} id={id} />
           ))}
         </Physics>

@@ -23,6 +23,8 @@ export default function Hud() {
   const revealRoles = useSim((s) => s.revealRoles)
   const fruits = useSim((s) => s.fruits)
   const muted = useSim((s) => s.settings.muted)
+  const bar = useSim((s) => s.taskBar)
+  const card = useSim((s) => s.card)
 
   return (
     <>
@@ -30,6 +32,10 @@ export default function Hud() {
         <div className="plank">
           <span className="phase">{PHASE_LABEL[phase]}</span>
           <span className="clock">{clock(time)}</span>
+        </div>
+        <div className="taskbar" title={`${bar.done} of ${bar.total} tasks done`}>
+          <i style={{ width: `${(bar.done / Math.max(1, bar.total)) * 100}%` }} />
+          <span>Tasks</span>
         </div>
         <div className="controls">
           <button onClick={() => useSim.setState({ paused: !paused })}>{paused ? 'Resume' : 'Pause'}</button>
@@ -46,6 +52,13 @@ export default function Hud() {
           <button onClick={() => useSim.getState().newGame()}>New game</button>
         </div>
       </header>
+
+      {card && (
+        <div key={card.key} className={`phase-card${card.dark ? ' dark' : ''}`} aria-hidden="true">
+          <span>{card.sub}</span>
+          <h1>{card.title}</h1>
+        </div>
+      )}
 
       <aside className="panel roster">
         <h2>Fruits</h2>

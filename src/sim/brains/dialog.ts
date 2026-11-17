@@ -19,3 +19,14 @@ export const BACKSTORIES = [
   'I was in the bargain bin once. It changes you.',
   'I learned everything I know from a jar of jam.',
 ]
+
+import type { Rng } from '../rng'
+import type { FruitView } from '../view'
+import type { ChatContext, ChatLine } from './types'
+
+/** One stock line for a roaming chat. Filled out with milestone 5. */
+export function stockChat(view: FruitView, chat: ChatContext, rng: Rng): ChatLine {
+  void view
+  void chat
+  return { say: rng.pick(['Hey.', 'Busy busy.', 'Oh, hi.']) }
+}

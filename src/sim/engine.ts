@@ -1,22 +1,53 @@
+import { decide, resolveActions, walk } from './actions'
+import { makeBrain } from './brains'
+import type { LlmOptions } from './brains/llm'
+import type { Brain, BrainKind, Claim, RoamAction } from './brains/types'
+import { BUTTON_COOLDOWN, MAX_GAME_TIME, TICK, TICKS_PER_SECOND } from './constants'
+import { encounters } from './encounters'
 import { round } from './log'
-import { AREAS, dist, OBSTACLE_MARGIN, OBSTACLES, randomSpot, ROOMS, SEAT_RING, STATIONS } from './map'
-import { findPath } from './nav'
 import type { SimEvent } from './log'
+import { areaAt, SEAT_RING, STATIONS } from './map'
+import type { TaskLength } from './map'
+import type { Sighting } from './memory'
+import { startMind } from './mind'
+import type { Mind } from './mind'
+import { emptyVision, updateVision } from './perception'
+import type { Vision } from './perception'
 import { makeRng } from './rng'
 import type { Rng } from './rng'
 import { makeRoster } from './roster'
 import { DEFAULT_RULES } from './rules'
-import type { FruitDef, Phase, Role, Rules, Vec2 } from './types'
+import type { FruitDef, Phase, Role, Rules, Vec2, Winner } from './types'
+import { observe } from './witness'
 
-export const TICKS_PER_SECOND = 10
-/** One sim step, in sim seconds. */
-export const TICK = 1 / TICKS_PER_SECOND
-/** How far a fruit walks in one sim second. */
-export const WALK_SPEED = 2.6
+export { TICK, TICKS_PER_SECOND, WALK_SPEED } from './constants'
+
 /** Ticks between position frames in the log: twice per sim second. */
 const POSITION_EVERY = TICKS_PER_SECOND / 2
-const IDLE_MIN = 1
-const IDLE_MAX = 4
+
+export interface TaskState {
+  station: string
+  length: TaskLength
+  duration: number
+  progress: number
+  done: boolean
+}
+
+export interface Body {
+  /** The victim's id. */
+  id: string
+  pos: Vec2
+  area: string
+  time: number
+  killer: string
+}
+
+/** Where a fruit was, and when. Its own history, which it remembers exactly. */
+export interface TrailStop {
+  area: string
+  from: number
+  to: number
+}
 
 /** A fruit in a running game. The sim owns where it is; the 3D fruit only follows. */
 export interface SimFruit {
@@ -24,28 +55,108 @@ export interface SimFruit {
   def: FruitDef
   role: Role
   alive: boolean
-  /** Logical position, advanced every tick. */
   pos: Vec2
+  /** The area it is standing in, refreshed every tick. */
+  area: string
   /** Movement over the last tick, in units per sim second. The renderer uses it to lead the fruit. */
   vel: Vec2
   /** Points still to walk through, in order. */
   path: Vec2[]
+  /** Where the current path ends, so a fresh path is only planned when that changes. */
+  goal: Vec2 | null
   /** Which side of a doorway this fruit walks on, -1 to 1, so groups spread out. */
   lane: number
-  /** Standing still until this sim time before picking somewhere new. */
-  idleUntil: number
+  action: RoamAction
+  /** When the brain is next asked what to do. */
+  decideAt: number
+  /** Crew: real tasks. Rotten: a fake list to stand at. */
+  tasks: TaskState[]
+  /** The station it is working at (or pretending to) right now, and since when. */
+  working: string | null
+  workSince: number
+  /** When it started fixing the lights, if it is. */
+  fixSince: number | null
+  memory: Sighting[]
+  mind: Mind
+  /** Rotten: when the knife is ready again. */
+  killReadyAt: number
+  emergencies: number
+  trail: TrailStop[]
+  /** Every claim it has made out loud, so a careful Rotten can keep its story straight. */
+  ledger: { t: number; claim: Claim }[]
+  /** Stopped to talk until this time. */
+  busyUntil: number
+  /** Who it is talking to right now. */
+  talkingTo: string | null
+  /** Bodies it has found. */
+  seenBodies: string[]
+  diedAt: number | null
+  /** Its own random stream, for memory bending and noticing. */
+  rng: Rng
+}
+
+/** Things everyone knows: what was said and decided in meetings, and who has died. */
+export type PublicEvent =
+  | { t: number; kind: 'meeting'; reason: 'body' | 'emergency'; caller: string; victim?: string; room?: string }
+  | { t: number; kind: 'line'; who: string; move: string; target?: string; claim?: Claim; say: string }
+  | { t: number; kind: 'vote'; voter: string; target: string }
+  | { t: number; kind: 'eject'; who: string; role?: Role }
+  | { t: number; kind: 'noEject'; tie: boolean }
+  | { t: number; kind: 'dead'; who: string }
+
+export interface MeetingState {
+  reason: 'body' | 'emergency'
+  caller: string
+  body?: Body
+  /** Sim time the meeting was called. Roam time stands still until it ends. */
+  at: number
+}
+
+/** Running totals for the benchmarks. */
+export interface GameStats {
+  kills: number
+  witnessedKills: number
+  meetings: number
+  ejections: { who: string; role: Role; byBentMemory: boolean }[]
+  skips: number
+  vents: number
+  sabotages: number
+  bentMemories: number
+  contradictions: number
+  chats: number
+  rumours: number
 }
 
 export interface Game {
   seed: number
   rules: Rules
   phase: Phase
-  /** Sim seconds since the start. */
+  /** Sim seconds since the start. Stands still during meetings. */
   time: number
   tick: number
   fruits: SimFruit[]
+  /** The game's own random stream. Brains and memories have their own forks. */
   rng: Rng
   log: SimEvent[]
+  brains: Map<string, Brain>
+  bodies: Body[]
+  vision: Vision
+  lightsOut: boolean
+  sabotageReadyAt: number
+  buttonReadyAt: number
+  meeting: MeetingState | null
+  public: PublicEvent[]
+  /** Fruits everyone knows are dead. */
+  publicDead: Set<string>
+  winner: Winner | 'draw' | null
+  /** How the game ended: tasks, ejection, kills or timeout. */
+  how: string | null
+  stats: GameStats
+  /** Per-pair cooldowns for chats in passing, and other encounter bookkeeping. */
+  encounterAt: Map<string, number>
+  nextId: number
+  /** Called for every event as it is logged (the screen listens here). */
+  onEvent?: (e: SimEvent) => void
 }
 
 export interface GameSetup {
@@ -53,9 +164,34 @@ export interface GameSetup {
   /** Left out: a random roster is drawn from the seed. */
   roster?: FruitDef[]
   rules?: Partial<Rules>
+  /** Brain for each side. Defaults to heuristic. */
+  brains?: { crew?: BrainKind; rotten?: BrainKind }
+  llm?: LlmOptions
 }
 
-export function createGame({ seed, roster, rules }: GameSetup): Game {
+/** Seat i of n round the meeting table. */
+export function seatPos(i: number, n: number): Vec2 {
+  const angle = (i / n) * Math.PI * 2 - Math.PI / 2
+  return [Math.cos(angle) * SEAT_RING, Math.sin(angle) * SEAT_RING]
+}
+
+/** A fruit's private list of stations: the right number of short and long ones, all different. */
+function dealTasks(rng: Rng, rules: Rules): TaskState[] {
+  const pick = (length: TaskLength, n: number) =>
+    rng
+      .shuffle(STATIONS.filter((s) => s.length === length))
+      .slice(0, n)
+      .map((s) => ({
+        station: s.id,
+        length,
+        duration: length === 'short' ? rules.shortTaskTime : rules.longTaskTime,
+        progress: 0,
+        done: false,
+      }))
+  return rng.shuffle([...pick('short', rules.shortTasks), ...pick('long', rules.longTasks)])
+}
+
+export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Game {
   const fullRules = { ...DEFAULT_RULES, ...rules }
   // Separate streams, so editing the roster never changes the game's own draws.
   const base = makeRng(seed)
@@ -65,21 +201,68 @@ export function createGame({ seed, roster, rules }: GameSetup): Game {
   const rotten = new Set(rng.shuffle(defs.map((d) => d.id)).slice(0, fullRules.rotten))
 
   const fruits: SimFruit[] = defs.map((def, i) => {
+    const pos = seatPos(i, defs.length)
     return {
       id: def.id,
       def,
       role: rotten.has(def.id) ? 'rotten' : 'crew',
       alive: true,
-      pos: seatPos(i, defs.length),
+      pos,
+      area: areaAt(pos),
       vel: [0, 0],
       path: [],
+      goal: null,
       lane: rng.range(-1, 1),
-      idleUntil: rng.range(0, IDLE_MAX),
+      action: { kind: 'idle' },
+      // Staggered, so the fruits don't all decide on the same tick.
+      decideAt: (i % TICKS_PER_SECOND) * TICK,
+      tasks: dealTasks(rng, fullRules),
+      working: null,
+      workSince: 0,
+      fixSince: null,
+      memory: [],
+      mind: startMind(rng, defs.filter((d) => d.id !== def.id).map((d) => d.id)),
+      killReadyAt: fullRules.killCooldown,
+      emergencies: fullRules.emergencyMeetings,
+      trail: [{ area: areaAt(pos), from: 0, to: 0 }],
+      ledger: [],
+      busyUntil: 0,
+      talkingTo: null,
+      seenBodies: [],
+      diedAt: null,
+      rng: base.fork(`fruit:${def.id}`),
     }
   })
 
-  const game: Game = { seed, rules: fullRules, phase: 'roam', time: 0, tick: 0, fruits, rng, log: [] }
-  game.log.push({
+  const game: Game = {
+    seed,
+    rules: fullRules,
+    phase: 'roam',
+    time: 0,
+    tick: 0,
+    fruits,
+    rng,
+    log: [],
+    brains: new Map(),
+    bodies: [],
+    vision: emptyVision(),
+    lightsOut: false,
+    sabotageReadyAt: 20,
+    buttonReadyAt: BUTTON_COOLDOWN,
+    meeting: null,
+    public: [],
+    publicDead: new Set(),
+    winner: null,
+    how: null,
+    stats: { kills: 0, witnessedKills: 0, meetings: 0, ejections: [], skips: 0, vents: 0, sabotages: 0, bentMemories: 0, contradictions: 0, chats: 0, rumours: 0 },
+    encounterAt: new Map(),
+    nextId: 1,
+  }
+  for (const f of fruits) {
+    const kind = f.role === 'rotten' ? (brains?.rotten ?? 'heuristic') : (brains?.crew ?? 'heuristic')
+    game.brains.set(f.id, makeBrain(kind, f.id, base.fork(`brain:${f.id}`), llm))
+  }
+  logEvent(game, {
     t: 0,
     kind: 'start',
     seed,
@@ -89,96 +272,105 @@ export function createGame({ seed, roster, rules }: GameSetup): Game {
   return game
 }
 
-/** Advance the game by one tick. */
-export function step(game: Game) {
-  if (game.phase === 'over') return
-  for (const fruit of game.fruits) {
-    if (!fruit.alive) continue
-    if (!fruit.path.length && game.time >= fruit.idleUntil) fruit.path = findPath(fruit.pos, somewhere(game.rng), fruit.lane)
-    walk(game, fruit)
+export function logEvent(game: Game, e: SimEvent) {
+  game.log.push(e)
+  game.onEvent?.(e)
+}
+
+export function fruitById(game: Game, id: string): SimFruit | undefined {
+  return game.fruits.find((f) => f.id === id)
+}
+
+export function nameOf(game: Game, id: string): string {
+  return fruitById(game, id)?.def.name ?? id
+}
+
+/** Crew tasks done and in total (ghosts' tasks count too). */
+export function taskBar(game: Game): { done: number; total: number } {
+  let done = 0
+  let total = 0
+  for (const f of game.fruits) {
+    if (f.role !== 'crew') continue
+    for (const t of f.tasks) {
+      total++
+      if (t.done) done++
+    }
   }
+  return { done, total }
+}
+
+/** Advance the game by one roam tick, in the order the plan sets out. */
+export function step(game: Game) {
+  if (game.phase !== 'roam') return
+  // 1-2. Move everyone (work at stations is advanced in step 6, with the other actions).
+  for (const f of game.fruits) {
+    if (game.time < f.busyUntil) {
+      f.vel = [0, 0]
+      continue
+    }
+    walk(game, f)
+    const area = areaAt(f.pos)
+    if (area !== f.area) {
+      f.trail.push({ area, from: game.time, to: game.time })
+      if (f.trail.length > 200) f.trail.shift()
+    }
+    f.area = area
+    f.trail[f.trail.length - 1].to = game.time
+  }
+  // 3. Perception, turned into memories.
+  updateVision(game)
+  observe(game)
+  // 4. Hallway passes and task-side chats.
+  encounters(game)
+  // 5. Roam decisions, at most once per sim second per fruit. Dead crew keep doing tasks as ghosts.
+  for (const f of game.fruits) {
+    if (game.time >= f.decideAt && (f.alive || f.role === 'crew') && game.phase === 'roam') decide(game, f)
+  }
+  // 6. Work, kills, reports, vents and sabotage.
+  resolveActions(game)
+  // 7. Win check.
+  checkWin(game)
   game.tick++
   game.time = game.tick * TICK
+  if (game.time >= MAX_GAME_TIME && !game.winner) endGame(game, 'draw', 'timeout')
+  // 8. Positions for replays.
   if (game.tick % POSITION_EVERY === 0) logPositions(game)
 }
 
-/** Run ticks until `seconds` of sim time have passed. */
+/** Ends the game if a side has won. Returns true if it has. */
+export function checkWin(game: Game): boolean {
+  if (game.winner) return true
+  const living = game.fruits.filter((f) => f.alive)
+  const rotten = living.filter((f) => f.role === 'rotten').length
+  const bar = taskBar(game)
+  if (rotten === 0) endGame(game, 'crew', 'ejection')
+  else if (bar.done >= bar.total) endGame(game, 'crew', 'tasks')
+  else if (rotten * 2 >= living.length) endGame(game, 'rotten', 'kills')
+  return !!game.winner
+}
+
+export function endGame(game: Game, winner: Winner | 'draw', how: string) {
+  game.winner = winner
+  game.how = how
+  game.phase = 'over'
+  logEvent(game, { t: round(game.time), kind: 'over', winner, how })
+}
+
+/** Run roam ticks until `seconds` of sim time have passed, the game ends or a meeting is called. */
 export function runFor(game: Game, seconds: number) {
   const end = game.tick + Math.round(seconds * TICKS_PER_SECOND)
-  while (game.tick < end && game.phase !== 'over') step(game)
+  while (game.tick < end && game.phase === 'roam') step(game)
 }
-
-/** Move a fruit along its path by one tick's worth of walking. */
-function walk(game: Game, fruit: SimFruit) {
-  const [startX, startZ] = fruit.pos
-  let left = WALK_SPEED * TICK
-  while (left > 0 && fruit.path.length) {
-    const [tx, tz] = fruit.path[0]
-    const dx = tx - fruit.pos[0]
-    const dz = tz - fruit.pos[1]
-    // Math.sqrt rather than Math.hypot: hypot's rounding is not pinned down by the spec.
-    const d = Math.sqrt(dx * dx + dz * dz)
-    if (d <= left) {
-      fruit.pos = [tx, tz]
-      fruit.path.shift()
-      left -= d
-      if (!fruit.path.length) {
-        fruit.idleUntil = game.time + game.rng.range(IDLE_MIN, IDLE_MAX)
-        game.log.push({ t: round(game.time), kind: 'arrive', who: fruit.id, at: [round(tx), round(tz)] })
-      }
-    } else {
-      fruit.pos = avoidObstacles(fruit.pos, [fruit.pos[0] + (dx / d) * left, fruit.pos[1] + (dz / d) * left], fruit.lane)
-      left = 0
-    }
-  }
-  fruit.vel = [(fruit.pos[0] - startX) / TICK, (fruit.pos[1] - startZ) / TICK]
-}
-
-/** Milestone 2 wandering: half the time a task station, otherwise a random spot in a random room. */
-function somewhere(rng: Rng): Vec2 {
-  return rng.chance(0.5) ? rng.pick(STATIONS).at : randomSpot(rng, rng.pick(ROOMS).id)
-}
-
-/** Seat i of n round the meeting table. */
-export function seatPos(i: number, n: number): Vec2 {
-  const angle = (i / n) * Math.PI * 2 - Math.PI / 2
-  return [Math.cos(angle) * SEAT_RING, Math.sin(angle) * SEAT_RING]
-}
-
-/**
- * A step that would end inside an obstacle slides round its edge instead, always the same way
- * for the same fruit, so a fruit walking straight at the table goes round it rather than stopping.
- */
-export function avoidObstacles(from: Vec2, to: Vec2, lane: number): Vec2 {
-  for (const o of OBSTACLES) {
-    const keep = o.radius + OBSTACLE_MARGIN
-    if (dist(to, o.at) >= keep) continue
-    const rx = from[0] - o.at[0]
-    const rz = from[1] - o.at[1]
-    const r = Math.sqrt(rx * rx + rz * rz) || 1
-    const step = dist(from, to)
-    // Tangent direction, picked by which side the step was heading, or the lane when dead on.
-    const side = Math.sign(rx * (to[1] - from[1]) - rz * (to[0] - from[0])) || (lane >= 0 ? 1 : -1)
-    const tx = (-rz / r) * side
-    const tz = (rx / r) * side
-    // Stepping along the tangent from outside the rim always ends further out, so no
-    // correction is needed; only a fruit that somehow started inside is pushed back out.
-    const nx = from[0] + tx * step - o.at[0]
-    const nz = from[1] + tz * step - o.at[1]
-    const n = Math.sqrt(nx * nx + nz * nz) || 1
-    if (n >= keep) return [o.at[0] + nx, o.at[1] + nz]
-    return [o.at[0] + (nx / n) * keep, o.at[1] + (nz / n) * keep]
-  }
-  return to
-}
-
-/** Every area's id, for checks. */
-export const AREA_IDS = AREAS.map((a) => a.id)
 
 function logPositions(game: Game) {
-  game.log.push({
+  logEvent(game, {
     t: round(game.time),
     kind: 'positions',
     at: game.fruits.filter((f) => f.alive).map((f) => [f.id, round(f.pos[0]), round(f.pos[1])]),
   })
+}
+
+/** A new id for a memory or anything else that needs one. */
+export function newId(game: Game): number {
+  return game.nextId++
 }
