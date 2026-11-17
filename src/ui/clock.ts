@@ -12,6 +12,24 @@ const MAX_FRAME = 0.1
 /** How often, in sim seconds, the clock and fruit snapshot on screen are refreshed. */
 const SYNC_EVERY = 0.5
 
+/** Fruits being moved by the screen alone (carried to the Juicer), not by the sim. */
+const overrides = new Map<string, { path: Vec2[]; pos: Vec2; done?: () => void }>()
+/** How fast carried fruits move, in world units per sim second (so it keeps pace at any speed). */
+const CARRY_SPEED = 3.4
+
+/** Walk these fruits along `paths` on screen only; `done` runs when the first one arrives. */
+export function carry(paths: Record<string, Vec2[]>, from: Record<string, Vec2>, done: () => void) {
+  let first = true
+  for (const id in paths) {
+    overrides.set(id, {
+      path: [...paths[id]],
+      pos: from[id],
+      done: first ? done : undefined,
+    })
+    first = false
+  }
+}
+
 let carried = 0
 /** Each fruit's position before the most recent tick, for smoothing between ticks. */
 const before = new Map<string, Vec2>()
@@ -22,6 +40,7 @@ function reset(game: Game) {
   carried = 0
   before.clear()
   meeting = null
+  overrides.clear()
   attach(game)
 }
 reset(currentGame())
@@ -63,6 +82,9 @@ export function advance(delta: number) {
     syncFruits(game)
     const done = runMeeting(game, browserPace(game)).finally(() => {
       if (meeting === done) meeting = null
+      // A carry still going when the meeting ends finishes at once.
+      for (const o of overrides.values()) o.done?.()
+      overrides.clear()
       syncFruits(game)
     })
     meeting = done
@@ -83,6 +105,7 @@ export function advance(delta: number) {
   const blend = game.phase === 'roam' ? carried / TICK : 1
   const pace = paused || game.phase !== 'roam' || !running ? 0 : speed
   for (const f of game.fruits) {
+    if (overrides.has(f.id)) continue
     const [px, pz] = before.get(f.id) ?? f.pos
     // A jump of more than a few units is a teleport (a vent, or seating for a meeting): no blending.
     const jump = Math.abs(f.pos[0] - px) + Math.abs(f.pos[1] - pz) > 3
@@ -92,6 +115,37 @@ export function advance(delta: number) {
       vx: f.vel[0] * pace,
       vz: f.vel[1] * pace,
     })
+  }
+
+  // Carried fruits follow their own path on screen.
+  const carrySpeed = CARRY_SPEED * speed * (paused ? 0 : 1)
+  for (const [id, o] of overrides) {
+    let left = carrySpeed * Math.min(delta, MAX_FRAME)
+    let vx = 0
+    let vz = 0
+    while (left > 0 && o.path.length) {
+      const [tx, tz] = o.path[0]
+      const dx = tx - o.pos[0]
+      const dz = tz - o.pos[1]
+      const d = Math.hypot(dx, dz)
+      vx = (dx / (d || 1)) * carrySpeed
+      vz = (dz / (d || 1)) * carrySpeed
+      if (d <= left) {
+        o.pos = [tx, tz]
+        o.path.shift()
+        left -= d
+      } else {
+        o.pos = [o.pos[0] + (dx / d) * left, o.pos[1] + (dz / d) * left]
+        left = 0
+      }
+    }
+    simTargets.set(id, { x: o.pos[0], z: o.pos[1], vx: o.path.length ? vx : 0, vz: o.path.length ? vz : 0 })
+    if (!o.path.length) {
+      o.done?.()
+      o.done = undefined
+      // Carriers linger until the meeting ends, then the sim takes them back.
+      if (game.phase === 'roam') overrides.delete(id)
+    }
   }
 
   if (Math.abs(game.time - time) >= SYNC_EVERY || useSim.getState().phase !== game.phase) {

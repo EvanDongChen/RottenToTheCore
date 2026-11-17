@@ -109,4 +109,19 @@ export interface MeetingView {
   /** Someone asked this fruit a question it must answer now. */
   askedBy?: string
   living: string[]
+  /**
+   * What this fruit made of claims said so far, checked against its own memory: it remembers the
+   * same (match), clearly otherwise (conflict), or vaguely otherwise (hedge). Not yet spoken about.
+   */
+  checks: MeetingCheck[]
+}
+
+export interface MeetingCheck {
+  speaker: string
+  how: 'match' | 'conflict' | 'hedge'
+  claim: Claim
+  /** What this fruit remembers instead (or the same), as a claim it could say out loud. */
+  mine: Claim
+  /** How sure it is of its own memory, 0..1. */
+  confidence: number
 }

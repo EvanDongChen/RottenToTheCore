@@ -4,6 +4,7 @@ import type { RottenPlan } from '../rotten'
 import type { FruitView } from '../view'
 import { crewRoam } from './crew'
 import { stockChat } from './dialog'
+import { crewSpeak, crewVote, rottenSpeak, rottenVote } from './speak'
 import type { Ballot, Brain, ChatContext, ChatLine, MeetingLine, MeetingView, RoamAction } from './types'
 
 /**
@@ -53,6 +54,7 @@ export function heuristicBeliefs(view: FruitView): Record<string, number> {
       }
     }
     score += (view.caught[o.id] ?? 0) * SCORE.caught
+    if (view.tailedBy.includes(o.id)) score += SCORE.accused
     // A suspicious nature reads more into the same evidence.
     score *= 0.7 + view.traits.suspicion * 0.6
     const odds = (prior / (1 - prior)) * Math.exp(score)
@@ -86,40 +88,22 @@ export class HeuristicBrain implements Brain {
   }
 
   async speak(view: FruitView, meeting: MeetingView): Promise<MeetingLine> {
-    void view
-    void meeting
-    return { move: 'pass', say: '…' }
+    if (view.role === 'rotten') return rottenSpeak(view, meeting, this.rng)
+    return crewSpeak(view, meeting, this.beliefs(view), this.rng)
   }
 
   async vote(view: FruitView, meeting: MeetingView): Promise<Ballot> {
-    const living = meeting.living.filter((id) => id !== view.id)
-    if (view.role === 'rotten') return rottenVote(view, meeting, this.rng)
-    const beliefs = this.beliefs(view)
-    const top = living.filter((id) => id in beliefs).sort((a, b) => beliefs[b] - beliefs[a])[0]
-    if (top && beliefs[top] > VOTE_ABOVE) return { target: top, reason: 'I have seen enough.' }
-    return { target: 'skip', reason: 'Not sure yet.' }
+    const tally = tallySoFar(view)
+    if (view.role === 'rotten') return rottenVote(view, meeting, this.rng, tally)
+    return crewVote(view, meeting, this.beliefs(view), this.rng, VOTE_ABOVE, tally)
   }
 }
 
-/** Votes cast so far in this meeting, per target. */
-export function tallySoFar(view: FruitView, meeting: MeetingView): Record<string, number> {
+/** Votes cast so far in this meeting, per target (skips left out). */
+export function tallySoFar(view: FruitView): Record<string, number> {
   const since = [...view.public].reverse().findIndex((e) => e.kind === 'meeting')
   const recent = since < 0 ? view.public : view.public.slice(view.public.length - since)
   const tally: Record<string, number> = {}
   for (const e of recent) if (e.kind === 'vote' && e.target !== 'skip') tally[e.target] = (tally[e.target] ?? 0) + 1
-  void meeting
   return tally
-}
-
-/** A Rotten votes with a crowd against a crew fruit, or skips to stay quiet. */
-export function rottenVote(view: FruitView, meeting: MeetingView, rng: Rng): Ballot {
-  const tally = tallySoFar(view, meeting)
-  const crowd = Object.entries(tally)
-    .filter(([id]) => id !== view.id && !view.partners.includes(id) && meeting.living.includes(id))
-    .sort((a, b) => b[1] - a[1])[0]
-  if (crowd && crowd[1] >= 1) return { target: crowd[0], reason: 'Everyone else seems sure.' }
-  // Someone accused me in this meeting: point back at them, sometimes.
-  const accuser = meeting.lines.find((l) => l.line.target === view.id && (l.line.move === 'accuse' || l.line.move === 'hardClaim'))
-  if (accuser && meeting.living.includes(accuser.who) && rng.chance(0.5 + view.traits.aggression * 0.4)) return { target: accuser.who, reason: 'Funny how keen they are to blame me.' }
-  return { target: 'skip', reason: 'We do not know enough.' }
 }

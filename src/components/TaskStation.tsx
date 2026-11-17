@@ -1,4 +1,5 @@
 import { FUSE_BOX, MONITORS, STATIONS } from '../sim/map'
+import { useSim } from '../ui/store'
 import type { Station } from '../sim/map'
 
 /**
@@ -68,10 +69,7 @@ function Prop({ at, kind }: { at: [number, number]; kind: string }) {
             <cylinderGeometry args={[0.55, 0.7, 0.5, 18]} />
             <meshStandardMaterial color="#9aa4b2" />
           </mesh>
-          <mesh position={[1.1, 0.35, 0]}>
-            <cylinderGeometry args={[0.22, 0.18, 0.7, 14]} />
-            <meshStandardMaterial color="#ffb03a" transparent opacity={0.7} />
-          </mesh>
+          <JuiceGlass />
         </>
       )
       break
@@ -133,4 +131,22 @@ function Prop({ at, kind }: { at: [number, number]; kind: string }) {
       body = <BOX size={[1, 1, 1]} at={[0, 0.5, 0]} color="#e9edf2" />
   }
   return <group position={[at[0], 0, at[1]]}>{body}</group>
+}
+
+/** The Juicer's glass: it fills a little more with every fruit that goes in. */
+function JuiceGlass() {
+  const juice = useSim((s) => s.juice)
+  const level = Math.min(1, 0.15 + juice * 0.22)
+  return (
+    <group position={[1.1, 0, 0]}>
+      <mesh position={[0, 0.4, 0]}>
+        <cylinderGeometry args={[0.24, 0.2, 0.8, 16, 1, true]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={0.35} />
+      </mesh>
+      <mesh position={[0, (0.78 * level) / 2 + 0.01, 0]}>
+        <cylinderGeometry args={[0.21, 0.19, 0.78 * level, 16]} />
+        <meshStandardMaterial color="#ffb03a" />
+      </mesh>
+    </group>
+  )
 }

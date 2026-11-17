@@ -130,6 +130,8 @@ export interface GameStats {
   contradictions: number
   chats: number
   rumours: number
+  /** Meeting lines a brain got wrong that had to be repaired. */
+  repairedLines: number
 }
 
 export interface Game {
@@ -263,7 +265,7 @@ export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Gam
     publicDead: new Set(),
     winner: null,
     how: null,
-    stats: { kills: 0, witnessedKills: 0, meetings: 0, ejections: [], skips: 0, vents: 0, sabotages: 0, bentMemories: 0, contradictions: 0, chats: 0, rumours: 0 },
+    stats: { kills: 0, witnessedKills: 0, meetings: 0, ejections: [], skips: 0, vents: 0, sabotages: 0, bentMemories: 0, contradictions: 0, chats: 0, rumours: 0, repairedLines: 0 },
     encounterAt: new Map(),
     nextId: 1,
   }

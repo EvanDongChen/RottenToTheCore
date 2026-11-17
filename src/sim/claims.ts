@@ -12,6 +12,9 @@ import { addSighting, nextDoor } from './witness'
 
 export type Check = { result: 'match' | 'conflict' | 'hedge'; memory: Sighting; bent: boolean } | null
 
+/** Seconds at each end of a claimed stay that don't count against it. */
+const EDGE = 4
+
 /** Two time spans overlap, with a little slack for vague memories. */
 function overlaps(a0: number, a1: number, b0: number, b1: number, slack = 2) {
   return a0 <= b1 + slack && b0 <= a1 + slack
@@ -38,6 +41,10 @@ export function checkWhere(game: Game, listener: SimFruit, speaker: string, clai
     const c = confidence(m, game.time)
     if (c < 0.4) continue
     const agree = samePlace(r.room, claim.room)
+    // Seen elsewhere only counts against an alibi well inside the claimed time: right at its
+    // edges the speaker was just arriving or leaving.
+    const inside = r.to >= claim.from + EDGE && r.from <= claim.to - EDGE
+    if (!agree && !inside) continue
     const result = agree ? (c > 0.6 ? 'match' : null) : c > 0.6 ? 'conflict' : 'hedge'
     if (!result) continue
     // A conflict outranks a match: one clear sighting elsewhere breaks an alibi.

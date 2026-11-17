@@ -2,6 +2,9 @@ import { fruitById, nameOf, taskBar } from '../sim/engine'
 import type { Game } from '../sim/engine'
 import type { SimEvent } from '../sim/log'
 import { placeName, vent } from '../sim/map'
+import { findPath } from '../sim/nav'
+import type { Role, Vec2 } from '../sim/types'
+import { carry } from './clock'
 import { babble, cheer, clang, gasp, slice, startParty, sulk, thud, voteTick } from './sfx'
 import { currentGame, uiFruits, useSim } from './store'
 import type { FeedEntry, SimState } from './store'
@@ -17,6 +20,13 @@ const MAX_FEED = 400
 /** Real milliseconds for something that should last `ms` at 1x, shortened at higher speeds. */
 function scaled(ms: number) {
   return ms / Math.sqrt(useSim.getState().speed)
+}
+
+/** Run `fn` after `simSeconds` of game time (real time divided by the speed), while this game lasts. */
+function laterSim(game: Game, simSeconds: number, fn: () => void) {
+  setTimeout(() => {
+    if (game === currentGame()) fn()
+  }, (simSeconds * 1000) / useSim.getState().speed)
 }
 
 function later(game: Game, ms: number, fn: () => void) {
@@ -62,7 +72,12 @@ export function say(game: Game, id: string, text: string, to?: string) {
 /** Copy the fruits' state (alive, mood, beliefs) and the task bar into the store. */
 export function syncFruits(game: Game) {
   if (game !== currentGame()) return
-  useSim.setState({ fruits: uiFruits(game), taskBar: taskBar(game), phase: game.phase, lightsOut: game.lightsOut })
+  // The ejected fruit stays upright on screen until it reaches the Juicer.
+  const { ejecting, votes } = useSim.getState()
+  const fruits = uiFruits(game).map((f) => (f.id === ejecting ? { ...f, alive: true } : f))
+  // Vote crosses stay up for the ejection, then clear once roaming starts again.
+  const clearVotes = game.phase === 'roam' && !ejecting && Object.keys(votes).length > 0
+  useSim.setState({ fruits, taskBar: taskBar(game), phase: game.phase, lightsOut: game.lightsOut, ...(clearVotes ? { votes: {} } : {}) })
 }
 
 export function attach(game: Game) {
@@ -163,15 +178,8 @@ function handle(game: Game, e: SimEvent) {
       break
     case 'eject': {
       if (e.lastWords) say(game, e.who, e.lastWords)
+      laterSim(game, 2.4, () => ejectOnScreen(game, e.who, e.role, e.votes))
       const confirm = game.rules.confirmEjects
-      later(game, 2200, () => {
-        useSim.setState({ ejecting: e.who, speaker: null })
-        card(`${n(e.who).toUpperCase()} ${confirm ? (e.role === 'rotten' ? 'WAS ROTTEN' : 'WAS NOT ROTTEN') : 'WAS EJECTED'}`, `${e.votes} votes. Into the ${useSim.getState().settings.ejectStyle === 'compost' ? 'compost' : 'Juicer'} it goes.`, true)
-        if (confirm && e.role === 'rotten') cheer()
-        else gasp()
-        for (const f of game.fruits) if (f.alive) react(game, f.id, confirm ? (e.role === 'rotten' ? 'cheer' : 'gasp') : 'puzzle', 2000)
-        syncFruits(game)
-      })
       feed({ t: e.t, tab: 'meeting', text: `${n(e.who)} was ejected${confirm ? ` and was ${e.role === 'rotten' ? '' : 'not '}Rotten` : ''}.${e.lastWords ? ` Last words: "${e.lastWords}"` : ''}` })
       break
     }
@@ -195,6 +203,42 @@ function handle(game: Game, e: SimEvent) {
       break
     }
   }
+}
+
+/** Where an ejected fruit is taken: the Juicer's mouth, or the compost bin in the Greenhouse. */
+const JUICER_MOUTH: Vec2 = [0, -15.2]
+const COMPOST: Vec2 = [-23, -17.5]
+
+/** Two fruits carry the ejected one off; SPLORT, the glass fills, and the room reacts. */
+function ejectOnScreen(game: Game, who: string, role: Role, votes: number) {
+  const out = fruitById(game, who)
+  if (!out) return
+  const compost = useSim.getState().settings.ejectStyle === 'compost'
+  const dest = compost ? COMPOST : JUICER_MOUTH
+  const carriers = game.fruits
+    .filter((f) => f.alive)
+    .sort((a, b) => Math.hypot(a.pos[0] - out.pos[0], a.pos[1] - out.pos[1]) - Math.hypot(b.pos[0] - out.pos[0], b.pos[1] - out.pos[1]))
+    .slice(0, 2)
+  const paths: Record<string, Vec2[]> = { [who]: findPath(out.pos, dest, 0) }
+  const from: Record<string, Vec2> = { [who]: out.pos }
+  carriers.forEach((c, i) => {
+    const side = i ? 1.1 : -1.1
+    paths[c.id] = findPath(c.pos, [dest[0] + side, dest[1] + 1.4], i ? 1 : -1)
+    from[c.id] = c.pos
+  })
+  useSim.setState({ ejecting: who, speaker: null, lookAt: Object.fromEntries(carriers.map((c) => [c.id, who])) })
+  carry(paths, from, () => {
+    if (game !== currentGame()) return
+    burst(compost ? 'PLOP!' : 'SPLORT!', dest[0], dest[1])
+    slice()
+    const confirm = game.rules.confirmEjects
+    card(`${nameOf(game, who).toUpperCase()} ${confirm ? (role === 'rotten' ? 'WAS ROTTEN' : 'WAS NOT ROTTEN') : 'WAS EJECTED'}`, `${votes} votes. Into the ${compost ? 'compost' : 'Juicer'}.`, true)
+    if (confirm && role === 'rotten') cheer()
+    else gasp()
+    useSim.setState((st) => ({ ejecting: null, juice: st.juice + 1, cleared: { ...st.cleared, [who]: true }, lookAt: {} }))
+    for (const f of game.fruits) if (f.alive) react(game, f.id, confirm ? (role === 'rotten' ? 'cheer' : 'gasp') : 'puzzle', 2000)
+    syncFruits(game)
+  })
 }
 
 const HOW: Record<string, string> = {

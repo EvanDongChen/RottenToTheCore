@@ -150,6 +150,8 @@ export interface SimState {
   cleared: Record<string, boolean | undefined>
   /** The fruit being carried off to the Juicer, if any. */
   ejecting: string | null
+  /** How many fruits have gone into the Juicer: the glass fills a little more each time. */
+  juice: number
   /** The winners' dance party: when it started (for keeping time) and who is dancing. */
   party: { at: number; dancers: string[] } | null
   /** Juice left on the floor where a fruit was chopped. */
@@ -209,6 +211,7 @@ function freshState(g: Game) {
     chopped: {},
     cleared: {},
     ejecting: null,
+    juice: 0,
     party: null,
     splats: [],
     bursts: [],
