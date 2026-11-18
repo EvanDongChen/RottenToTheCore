@@ -8,25 +8,25 @@ Crew roaming and the Rotten's plan are shared by every brain. The Bayesian crew 
 
 | Matchup | Games | Crew win | Rotten win | Draw | By tasks | By ejection | By kills |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| bayesian crew vs bayesian Rotten | 2000 | 80.1% | 18.2% | 1.8% | 0.8% | 79.3% | 18.2% |
-| bayesian crew vs heuristic Rotten | 2000 | 79.3% | 19.0% | 1.8% | 0.7% | 78.5% | 19.0% |
-| heuristic crew vs bayesian Rotten | 2000 | 53.3% | 45.4% | 1.4% | 1.6% | 51.7% | 45.4% |
-| heuristic crew vs heuristic Rotten | 2000 | 55.8% | 42.8% | 1.5% | 1.6% | 54.2% | 42.8% |
+| bayesian crew vs bayesian Rotten | 2000 | 68.4% | 30.0% | 1.6% | 0.8% | 67.6% | 30.0% |
+| bayesian crew vs heuristic Rotten | 2000 | 78.9% | 19.4% | 1.8% | 0.8% | 78.1% | 19.4% |
+| heuristic crew vs bayesian Rotten | 2000 | 50.0% | 48.9% | 1.2% | 1.5% | 48.5% | 48.9% |
+| heuristic crew vs heuristic Rotten | 2000 | 55.4% | 43.1% | 1.6% | 1.6% | 53.7% | 43.1% |
 
 ## How well the crew reason
 
 | Matchup | Correct ejections | Wrongful ejections | Skipped votes | Ejection accuracy |
 | --- | --- | --- | --- | --- |
-| bayesian crew vs bayesian Rotten | 1586 | 565 | 2476 | 73.7% |
-| bayesian crew vs heuristic Rotten | 1571 | 562 | 2428 | 73.7% |
-| heuristic crew vs bayesian Rotten | 1035 | 149 | 5786 | 87.4% |
-| heuristic crew vs heuristic Rotten | 1084 | 174 | 5605 | 86.2% |
+| bayesian crew vs bayesian Rotten | 1352 | 1189 | 2353 | 53.2% |
+| bayesian crew vs heuristic Rotten | 1562 | 585 | 2434 | 72.8% |
+| heuristic crew vs bayesian Rotten | 969 | 177 | 5856 | 84.6% |
+| heuristic crew vs heuristic Rotten | 1075 | 185 | 5585 | 85.3% |
 
 ## Pace, care and memory
 
 | Matchup | Game length (sim min) | Meetings / game | Kills / game | Kills witnessed | Bent memories / game | Wrongful ejections from bent memories | Contradictions / game | Chats / game |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bayesian crew vs bayesian Rotten | 2.90 | 2.31 | 3.06 | 8.1% | 104.8 | 74.9% | 0.75 | 30.0 |
-| bayesian crew vs heuristic Rotten | 2.92 | 2.28 | 3.04 | 8.5% | 104.1 | 77.0% | 1.29 | 30.1 |
-| heuristic crew vs bayesian Rotten | 4.12 | 3.48 | 4.61 | 5.7% | 159.7 | 75.2% | 0.94 | 40.1 |
-| heuristic crew vs heuristic Rotten | 4.01 | 3.43 | 4.49 | 5.9% | 155.8 | 74.1% | 1.37 | 39.3 |
+| bayesian crew vs bayesian Rotten | 3.01 | 2.45 | 3.29 | 9.0% | 111.0 | 65.9% | 0.88 | 29.9 |
+| bayesian crew vs heuristic Rotten | 2.95 | 2.29 | 3.05 | 8.3% | 104.5 | 76.9% | 1.31 | 30.0 |
+| heuristic crew vs bayesian Rotten | 3.91 | 3.50 | 4.67 | 6.3% | 158.7 | 78.0% | 1.03 | 38.1 |
+| heuristic crew vs heuristic Rotten | 4.05 | 3.42 | 4.49 | 5.7% | 155.6 | 74.1% | 1.39 | 39.2 |

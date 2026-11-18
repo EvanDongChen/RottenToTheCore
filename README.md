@@ -46,12 +46,12 @@ Every matchup below plays the same seeds. Full tables, including memory and paci
 
 | Matchup | Games | Crew win | Rotten win | Draw | By tasks | By ejection | By kills |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| bayesian crew vs bayesian Rotten | 2000 | 80.1% | 18.2% | 1.8% | 0.8% | 79.3% | 18.2% |
-| bayesian crew vs heuristic Rotten | 2000 | 79.3% | 19.0% | 1.8% | 0.7% | 78.5% | 19.0% |
-| heuristic crew vs bayesian Rotten | 2000 | 53.3% | 45.4% | 1.4% | 1.6% | 51.7% | 45.4% |
-| heuristic crew vs heuristic Rotten | 2000 | 55.8% | 42.8% | 1.5% | 1.6% | 54.2% | 42.8% |
+| bayesian crew vs bayesian Rotten | 2000 | 68.4% | 30.0% | 1.6% | 0.8% | 67.6% | 30.0% |
+| bayesian crew vs heuristic Rotten | 2000 | 78.9% | 19.4% | 1.8% | 0.8% | 78.1% | 19.4% |
+| heuristic crew vs bayesian Rotten | 2000 | 50.0% | 48.9% | 1.2% | 1.5% | 48.5% | 48.9% |
+| heuristic crew vs heuristic Rotten | 2000 | 55.4% | 43.1% | 1.6% | 1.6% | 53.7% | 43.1% |
 
-The Bayesian crew win about 24 points more often than the heuristic crew. They vote more often and act on the endgame, so they also eject more crew by mistake: their ejections are less accurate (74% against 86%), but far fewer games run out of time. The thinking Bayesian Rotten wins about 3 points more than the heuristic one against heuristic crew, and makes no real difference against Bayesian crew.
+The Bayesian crew win about 24 points more often than the heuristic crew against the same Rotten. They vote more often and act on the endgame, so they also eject more crew by mistake: their ejections are less accurate, but far fewer games run out of time. The thinking Bayesian Rotten wins about 11 points more than the heuristic one against Bayesian crew (30% against 19%), and 6 more against heuristic crew. Most of that comes from faking tasks for exactly as long as they take, since a fruit seen lingering at a station was the third most common reason crew voted for the Rotten.
 
 ### Calibration
 
@@ -93,7 +93,13 @@ src/headless/   the CLI and the results report
 
 **The heuristic brain** adds its clues up, weighted by personality. Suspicious fruits read more into everything, the gullible believe what they hear, and the stubborn don't. Grudge-holders never forget who accused them. Only bold fruits vote on a hunch in the endgame.
 
-**The Bayesian brain** keeps P(Rotten) for every other fruit from a likelihood table fitted from games. It weighs hearsay as either honest or a Rotten's lie, depending on how likely the teller is to be Rotten. With two Rotten it scores every pair, so two fruits covering for each other stand out. It roams to learn, keeping an eye on whoever it is least sure about. As Rotten, it tracks who probably suspects it: it kills witnesses and accusers, keeps scapegoats alive, picks alibis nobody it saw could contradict, and never leans on its partner.
+**The Bayesian brain** keeps P(Rotten) for every other fruit from a likelihood table fitted from games. It weighs hearsay as either honest or a Rotten's lie, depending on how likely the teller is to be Rotten. With two Rotten it scores every pair, so two fruits covering for each other stand out. It roams to learn, keeping an eye on whoever it is least sure about. As Rotten, it tracks who probably suspects it:
+- it kills witnesses and accusers, and keeps scapegoats alive
+- it fakes tasks for exactly as long as they take, then moves on
+- after a kill it goes looking for company to be seen with
+- it picks alibis nobody it saw could contradict, and never leans on its partner
+- when it reports its own kill, it frames a crew fruit it really saw near the body, so others' memories back the story up
+- if someone saw it strike, it gets in first and claims that fruit did the killing, and it turns a witness's accusation straight back on them
 
 **Personalities** are set per fruit on the setup screen, as in One Bad Apple:
 - an archetype to start from (Detective, Paranoid, Sheep, Loudmouth, Hothead, Wallflower, Contrarian)
