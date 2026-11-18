@@ -13,13 +13,14 @@ import ReplayBar from './ReplayBar'
 
 const PHASE_LABEL = { setup: 'Setting up', roam: 'Roaming', meeting: 'Meeting', over: 'Game over' } as const
 
-type Toggle = 'director' | 'cones' | 'arrows' | 'showThoughts' | 'revealRoles'
+type Toggle = 'director' | 'cones' | 'arrows' | 'showThoughts' | 'revealRoles' | 'glow'
 const VIEWS: { key: Toggle; label: string; hint: string }[] = [
   { key: 'director', label: 'Director camera', hint: 'The camera follows the story by itself' },
   { key: 'cones', label: 'Vision cones', hint: 'What each fruit can see, cut off by walls' },
   { key: 'arrows', label: 'Suspicion arrows', hint: 'Who suspects whom, drawn on the floor' },
   { key: 'showThoughts', label: 'Thoughts', hint: "Every fruit's private thought over its head" },
   { key: 'revealRoles', label: 'Reveal roles', hint: 'Spoilers: show who is Rotten' },
+  { key: 'glow', label: 'Glow', hint: 'A soft glow round screens, lights and buttons (turn off if it runs slowly)' },
 ]
 
 /**
@@ -41,6 +42,7 @@ export default function Hud() {
   const tally = useSim((s) => s.tally)
   const problem = useSim((s) => s.problem)
   const meltdownAt = useSim((s) => s.meltdownAt)
+  const followName = useSim((s) => (s.follow ? s.fruits.find((f) => f.id === s.follow)?.name : undefined))
   const views = useSim(useShallow((s) => Object.fromEntries(VIEWS.map((v) => [v.key, s[v.key]])) as Record<Toggle, boolean>))
   const [menu, setMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -61,6 +63,8 @@ export default function Hud() {
         e.preventDefault()
         useSim.setState((s) => ({ paused: !s.paused }))
       }
+      // Esc stops the camera following a fruit.
+      if (e.key === 'Escape') useSim.setState({ follow: null })
       const n = Number(e.key)
       if (n >= 1 && n <= SPEEDS.length) useSim.setState({ speed: SPEEDS[n - 1] })
     }
@@ -124,6 +128,11 @@ export default function Hud() {
             Setup
           </button>
         </div>
+        {followName && (
+          <button className="following" onClick={() => useSim.setState({ follow: null })} title="Stop following (Esc)">
+            Following <b>{followName}</b> · Esc
+          </button>
+        )}
       </header>
 
       {card && (

@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { MathUtils, Vector3 } from 'three'
 import { AREAS, centre, ROOMS, TABLE } from '../sim/map'
-import { currentGame, fruitPositions, useSim } from '../ui/store'
+import { currentGame, fruitPositions, ghostPositions, useSim } from '../ui/store'
 
 /** The Juicer's press, where ejected fruits go in. */
 const JUICER_PRESS: [number, number] = [0, -17.6]
@@ -12,6 +12,7 @@ const WIDE = 62
 const ROOM = 30
 const CLOSE = 11
 const TABLE_SHOT = 19
+const FOLLOW = 17
 /** How long a kill, a body or a vent holds the camera, in real milliseconds at 1x. */
 const HOLD_MS = { kill: 4200, body: 3500, vent: 2500 }
 /** A kill: close in for this long, then pull back to show who might have seen it. */
@@ -23,7 +24,8 @@ const CHAT_PULL = 12
  * The director: while it is on, the camera goes wherever the story is. In order of priority: a
  * kill (close in, then pull back to show who might have seen), a body being found, someone using
  * a vent, the meeting table and its speaker, a chat near the current shot, and otherwise a slow
- * drift over the busiest room. Turning it off gives free camera control.
+ * drift over the busiest room. Turning it off gives free camera control. Picking a fruit has the
+ * camera follow it, whether the director is on or not, until Esc.
  */
 export default function Director() {
   const controls = useThree((s) => s.controls) as unknown as { target: Vector3; update(): void } | null
@@ -31,11 +33,16 @@ export default function Director() {
   const want = useMemo(() => new Vector3(), [])
   const offset = useMemo(() => new Vector3(), [])
   const busiest = useRef({ room: 'cafeteria', since: 0 })
+  /** The fruit the camera has already closed in on, after which zoom is left to the viewer. */
+  const followZoom = useRef<string | null>(null)
 
   useFrame((_, delta) => {
     if (!controls) return
     const sim = useSim.getState()
-    if (!sim.director || sim.screen !== 'game') return
+    if (sim.screen !== 'game') return
+    // Following a picked fruit (or its ghost) comes before everything, director on or off.
+    const followed = sim.follow ? (fruitPositions.get(sim.follow) ?? ghostPositions.get(sim.follow)) : undefined
+    if (!sim.director && !followed) return
     const now = performance.now()
     const speedUp = Math.sqrt(sim.speed)
     let distance = ROOM
@@ -43,7 +50,12 @@ export default function Director() {
 
     const shot = sim.shot
     const shotAge = shot ? (now - shot.since) * speedUp : Infinity
-    if (shot && shotAge < HOLD_MS[shot.kind]) {
+    if (followed) {
+      want.set(followed.x, 1, followed.z)
+      // Close in once, then leave the zoom to the viewer's scroll wheel.
+      distance = followZoom.current === sim.follow ? -1 : FOLLOW
+      if (Math.abs(offset.subVectors(camera.position, controls.target).length() - FOLLOW) < 1) followZoom.current = sim.follow
+    } else if (shot && shotAge < HOLD_MS[shot.kind]) {
       want.set(shot.at[0], 1, shot.at[1])
       distance = shot.kind === 'kill' ? (shotAge < KILL_CLOSE_MS ? CLOSE * 0.8 : CLOSE * 1.6) : CLOSE
     } else if (sim.juicing) {
@@ -86,11 +98,12 @@ export default function Director() {
         distance = ROOM
       }
     }
-    if (game.phase === 'over' && !sim.party) distance = WIDE
+    if (game.phase === 'over' && !sim.party && !followed) distance = WIDE
 
     // Move what the camera looks at, and carry the camera along at the same angle.
     offset.subVectors(camera.position, controls.target)
-    const length = MathUtils.damp(offset.length(), distance, 1.8, delta)
+    if (!followed) followZoom.current = null
+    const length = distance < 0 ? offset.length() : MathUtils.damp(offset.length(), distance, 1.8, delta)
     controls.target.set(MathUtils.damp(controls.target.x, want.x, 2.2, delta), MathUtils.damp(controls.target.y, want.y, 2.2, delta), MathUtils.damp(controls.target.z, want.z, 2.2, delta))
     offset.normalize()
     camera.position.copy(controls.target).addScaledVector(offset, length)

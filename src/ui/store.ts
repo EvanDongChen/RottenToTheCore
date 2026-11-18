@@ -198,6 +198,10 @@ export interface SimState {
   feed: FeedEntry[]
   /** The fruit whose mind is open in the side panel. */
   selected: string | null
+  /** The fruit the camera is following, if any (picked by clicking it; Esc stops). */
+  follow: string | null
+  /** Soft glow round screens, lights and buttons. */
+  glow: boolean
   /** Who is speaking in the meeting right now. */
   speaker: string | null
   /** Who each fruit turns to face while standing: its conversation partner. */
@@ -375,6 +379,8 @@ export const useSim = create<SimState>((set, get) => {
     roster: game.fruits.map((f) => f.def),
     rosterEdited: false,
     selected: null,
+    follow: null,
+    glow: true,
     paused: false,
     speed: 1,
     revealRoles: false,
@@ -392,7 +398,7 @@ export const useSim = create<SimState>((set, get) => {
 
     newGame: (seed = randomSeed()) => {
       const s = get().settings
-      replace(gameFactory(seed, s, rosterFor(get())), { selected: null, replay: null, recapOpen: false })
+      replace(gameFactory(seed, s, rosterFor(get())), { selected: null, follow: null, replay: null, recapOpen: false })
       set({ roster: game.fruits.map((f) => f.def) })
     },
     reseed: (seed = randomSeed()) => {
@@ -402,14 +408,14 @@ export const useSim = create<SimState>((set, get) => {
     },
     startGame: () => {
       const s = get().settings
-      replace(gameFactory(get().seed, s, rosterFor(get())), { screen: 'game', selected: null, revealRoles: false, paused: false, replay: null, recapOpen: false })
+      replace(gameFactory(get().seed, s, rosterFor(get())), { screen: 'game', selected: null, follow: null, revealRoles: false, paused: false, replay: null, recapOpen: false })
     },
     toSetup: () => {
       const s = get().settings
       // Coming from the title screen, keep the seed (it may have come from a shared link).
       const seed = get().screen === 'title' ? get().seed : randomSeed()
       if (!get().rosterEdited) set({ roster: defaultRoster(seed, get().roster.length) })
-      replace(demoGame(seed, s, rosterFor(get())), { screen: 'setup', selected: null, replay: null, recapOpen: false, paused: false })
+      replace(demoGame(seed, s, rosterFor(get())), { screen: 'setup', selected: null, follow: null, replay: null, recapOpen: false, paused: false })
       set({ roster: get().rosterEdited ? get().roster : game.fruits.map((f) => f.def) })
     },
     setSettings: (patch) => {
@@ -445,7 +451,8 @@ export const useSim = create<SimState>((set, get) => {
       get().setSettings({ rules: { ...get().settings.rules, fruits: roster.length - 1 } })
     },
     randomizeRoster: () => get().reseed(),
-    select: (id) => set({ selected: id }),
+    // Picking a fruit also has the camera follow it; dropping the pick stops following.
+    select: (id) => set({ selected: id, follow: id }),
     adoptGame: (g, extra = {}) => replace(g, { screen: 'game', ...extra }),
   }
 })

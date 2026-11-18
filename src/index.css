@@ -2602,3 +2602,11 @@ button.on {
   border-radius: 8px;
   padding: 4px 6px;
 }
+
+/* The camera is following a fruit: say so, and offer the way out. */
+.following {
+  align-self: center;
+  font-size: 13px;
+  padding: 3px 12px;
+  background: #fff3c4;
+}

@@ -54,7 +54,7 @@ export function replayFromText(text: string): string | null {
 
 function start(setup: ReplaySetup, replay: Replay) {
   const game = createGame(setup)
-  useSim.getState().adoptGame(game, { replay, paused: false, revealRoles: true, selected: null })
+  useSim.getState().adoptGame(game, { replay, paused: false, revealRoles: true, selected: null, follow: null })
 }
 
 let seeking = 0
