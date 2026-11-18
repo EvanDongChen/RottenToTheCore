@@ -4,6 +4,7 @@ import { nameOf } from '../sim/engine'
 import { placeName, station } from '../sim/map'
 import { confidence, recall } from '../sim/memory'
 import { MOODS, TEMPERS } from '../sim/mind'
+import { archetypeOf, STYLE_INFO } from '../sim/personality'
 import { currentGame, useSim } from '../ui/store'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
 import RichText from './RichText'
@@ -73,7 +74,8 @@ export default function MindPanel() {
       </div>
       <p className="thought">{fruit.thought ? <RichText text={fruit.thought} /> : 'Nothing on its mind yet.'}</p>
       <p className="hint">
-        {fruit.alive ? `In ${data.where}` : 'Dead'} · {TEMPERS[fruit.traits.temper].label} · {goal}
+        {fruit.alive ? `In ${data.where}` : 'Dead'} · {archetypeOf(fruit.traits)?.label ?? 'Custom'}, {TEMPERS[fruit.traits.temper].label.toLowerCase()} · {goal}
+        {showRole && fruit.role === 'rotten' && fruit.traits.style && ` · ${STYLE_INFO[fruit.traits.style].label} Rotten`}
       </p>
       <div className="moods">
         {MOODS.map((m) => (

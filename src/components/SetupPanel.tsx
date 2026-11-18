@@ -1,14 +1,14 @@
 import { useRef, useState } from 'react'
 import type { BrainKind } from '../sim/brains/types'
 import { FREE_MODELS } from '../sim/brains/llm'
-import { QUIRK_PRESETS, quirkLabel } from '../sim/quirks'
 import { maxRotten, MAX_FRUITS, MIN_FRUITS } from '../sim/rules'
-import { FRUIT_KINDS, TRAIT_KEYS } from '../sim/types'
+import { FRUIT_KINDS } from '../sim/types'
 import type { Rules } from '../sim/types'
 import { replayFromText } from '../ui/replay'
 import { unlockAudio } from '../ui/sfx'
 import { randomSeed, useSim } from '../ui/store'
 import { LOOKS } from './fruitLooks'
+import PersonalityEditor, { carried, FruitQuirks, giveQuirk, QuirkTray } from './PersonalityEditor'
 
 const BRAINS: { id: BrainKind; label: string; hint: string }[] = [
   { id: 'heuristic', label: 'Heuristic', hint: 'Rules of thumb. Free and fast.' },
@@ -27,14 +27,6 @@ const NUMBERS: { key: keyof Rules; label: string; min: number; max: number; step
   { key: 'discussionTurns', label: 'Discussion turns', min: 6, max: 24 },
 ]
 
-const TRAIT_LABEL: Record<(typeof TRAIT_KEYS)[number], string> = {
-  aggression: 'Aggression',
-  honesty: 'Honesty',
-  talkativeness: 'Talkative',
-  suspicion: 'Suspicion',
-  sharpness: 'Sharpness',
-}
-
 /**
  * The setup screen: who plays, with which brains, under which rules. Every fruit can be renamed,
  * re-kinded and given a personality. A log file from a headless run can be loaded as a replay.
@@ -45,6 +37,9 @@ export default function SetupPanel() {
   const seed = useSim((s) => s.seed)
   const edited = useSim((s) => s.rosterEdited)
   const [open, setOpen] = useState<string | null>(null)
+  // A quirk picked up from the tray, and the card a quirk is being dragged over.
+  const [held, setHeld] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
   const { setSettings, setRules, updateFruit, addFruit, removeFruit, reseed, startGame } = useSim.getState()
@@ -165,9 +160,30 @@ export default function SetupPanel() {
         </button>
       </div>
       {edited && <p className="hint">Edited by hand: the seed alone won't reproduce this game in a shared link.</p>}
+      <QuirkTray held={held} setHeld={setHeld} />
       <ul className="roster-cards">
         {roster.map((f) => (
-          <li key={f.id} className={open === f.id ? 'open' : ''}>
+          <li
+            key={f.id}
+            className={`${open === f.id ? 'open' : ''}${overId === f.id ? ' drop' : ''}${held ? ' taking' : ''}`}
+            // Quirks land on a fruit by drag and drop, or by tapping the card while holding one.
+            onDragOver={(e) => {
+              e.preventDefault()
+              setOverId(f.id)
+            }}
+            onDragLeave={() => setOverId(null)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setOverId(null)
+              const c = carried(e)
+              if (c) giveQuirk(roster, f.id, c.quirk, c.from)
+            }}
+            onClick={() => {
+              if (!held) return
+              giveQuirk(roster, f.id, held)
+              setHeld(null)
+            }}
+          >
             <div className="roster-card-head">
               <span className="dot" style={{ background: LOOKS[f.kind].color }} />
               <input value={f.name} aria-label="Name" onChange={(e) => updateFruit(f.id, { name: e.target.value.slice(0, 16) })} />
@@ -183,30 +199,10 @@ export default function SetupPanel() {
                 ×
               </button>
             </div>
+            <FruitQuirks fruit={f} />
             {open === f.id && (
               <div className="roster-card-body">
-                {TRAIT_KEYS.map((k) => (
-                  <label key={k} className="slider">
-                    <span>{TRAIT_LABEL[k]}</span>
-                    <input type="range" min={0} max={1} step={0.1} value={f.traits[k]} onChange={(e) => updateFruit(f.id, { traits: { [k]: Number(e.target.value) } })} />
-                  </label>
-                ))}
-                <div className="chips">
-                  {QUIRK_PRESETS.map((q) => {
-                    const on = f.traits.quirks.includes(q.id)
-                    return (
-                      <button
-                        key={q.id}
-                        className={`chip${on ? ' on' : ''}`}
-                        style={{ background: on ? q.tint : undefined }}
-                        onClick={() => updateFruit(f.id, { traits: { quirks: on ? f.traits.quirks.filter((x) => x !== q.id) : [...f.traits.quirks, q.id].slice(-3) } })}
-                      >
-                        {quirkLabel(q.id)}
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="hint">"{f.traits.backstory}"</p>
+                <PersonalityEditor fruit={f} />
               </div>
             )}
           </li>

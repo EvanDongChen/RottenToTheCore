@@ -5,6 +5,7 @@ import type { FruitView } from '../view'
 import { alibiFor, isCareless } from '../rotten'
 import type { Rng } from '../rng'
 import type { Role, Traits } from '../types'
+import { presetOf } from '../quirks'
 import { fill } from './dialog'
 import { mustVote, storyBreaks } from './reasoning'
 import type { Ballot, Claim, MeetingLine, MeetingView } from './types'
@@ -281,6 +282,28 @@ function deed(c: Claim, n: (id: string) => string): string {
   return c.what === 'kill' ? `kill ${c.victim ? n(c.victim) : 'someone'} in ${placeName(c.room)}` : `use a vent in ${placeName(c.room)}`
 }
 
+// ---------- Personality in the voice ----------
+
+const HOT = ["It's OBVIOUSLY {name}!", 'Wake up, everyone! It is {name}!', '{name}. It is {name}. I KNOW it is {name}.']
+const MOVES_WITH_HEAT = ['accuse', 'bandwagon', 'hardClaim', 'contradict']
+
+/**
+ * The same line, said the way this fruit talks: a hothead shouts its accusations, a timid or
+ * trusting fruit hedges them, and a chatty one throws in its catchphrase now and then.
+ */
+export function voice(view: FruitView, line: MeetingLine, rng: Rng): MeetingLine {
+  const t = view.traits
+  let say = line.say
+  if (MOVES_WITH_HEAT.includes(line.move) && line.target) {
+    const name = view.others.find((o) => o.id === line.target)?.name ?? ''
+    if (t.aggression >= 0.85 && (line.move === 'accuse' || line.move === 'bandwagon') && rng.chance(0.6)) say = `${fill(rng.pick(HOT), { name })}${say.includes('.') ? ` ${say.slice(say.indexOf('.') + 1).trim()}` : ''}`.trim()
+    else if (t.aggression < 0.35 && t.suspicion < 0.4 && rng.chance(0.6)) say = `I'm not sure, but ${say.charAt(0).toLowerCase()}${say.slice(1)}`
+  }
+  const preset = t.quirks.map(presetOf).find(Boolean)
+  if (preset && say !== '…' && rng.chance(t.talkativeness * 0.3)) say = `${say} ${rng.pick(preset.tics)}`
+  return say === line.say ? line : { ...line, say }
+}
+
 // ---------- Crew ----------
 
 export interface SpeakStyle {
@@ -291,6 +314,10 @@ export interface SpeakStyle {
 }
 
 export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, style: SpeakStyle = { accuseAbove: 0.55 }): MeetingLine {
+  return voice(view, crewMove(view, meeting, beliefs, rng, style), rng)
+}
+
+function crewMove(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, style: SpeakStyle): MeetingLine {
   const n = nameFn(view)
   const t = view.traits
   const others = living(view, meeting)
@@ -454,6 +481,10 @@ function frameTarget(view: FruitView, meeting: MeetingView, rng: Rng, table?: Re
 }
 
 export function rottenSpeak(view: FruitView, meeting: MeetingView, rng: Rng, opts: RottenSpeech = {}): MeetingLine {
+  return voice(view, rottenMove(view, meeting, rng, opts), rng)
+}
+
+function rottenMove(view: FruitView, meeting: MeetingView, rng: Rng, opts: RottenSpeech): MeetingLine {
   const n = nameFn(view)
   const t = view.traits
   const framer = t.style === 'framer'

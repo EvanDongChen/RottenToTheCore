@@ -2509,3 +2509,96 @@ button.on {
     animation: none;
   }
 }
+
+/* ---------- Personalities on the setup screen ---------- */
+
+.quirk-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fff8e6;
+  border: 2px dashed var(--ink);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.quirk-tray .chip {
+  font-size: 12px;
+}
+
+.quirk-tray .row input {
+  flex: 1;
+  width: 0;
+}
+
+/* A fruit's own quirks, under its name. */
+.roster-cards .chips.mine {
+  margin-top: 5px;
+}
+
+.roster-cards .chips.mine .chip {
+  font-size: 11px;
+}
+
+/* Holding a quirk: every card is a place to drop it. Dragging over one lights it up. */
+.roster-cards li.taking {
+  cursor: copy;
+  border-style: dashed;
+}
+
+.roster-cards li.drop {
+  background: #fff3c4;
+  border-style: solid;
+}
+
+.personality {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.personality .row-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.personality .row-label span {
+  width: 76px;
+  flex: none;
+}
+
+.personality .row-label select {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.personality .hint {
+  margin: 0 0 2px;
+}
+
+.personality .slider span:first-child {
+  width: 76px;
+  flex: none;
+}
+
+.personality .backstory {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.personality .backstory textarea {
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 4px 6px;
+}
