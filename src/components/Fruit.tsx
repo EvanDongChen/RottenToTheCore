@@ -106,7 +106,7 @@ export default function Fruit({ id }: { id: string }) {
   const showThought = useSim((s) => s.showThoughts)
   // During a meeting vote: who this fruit is pointing at, and how many are pointing at it.
   const pointAt = useSim((s) => s.votes[id])
-  const votesAgainst = useSim((s) => Object.values(s.votes).filter((target) => target === id).length)
+  const votesAgainst = useSim((s) => s.tally[id] ?? 0)
   const reaction = useSim((s) => s.reactions[id])
   const armed = useSim((s) => s.attack?.attackerId === id)
   const striking = useSim((s) => s.attack?.attackerId === id && s.attack.striking)
@@ -678,7 +678,14 @@ export default function Fruit({ id }: { id: string }) {
               <div className="work-bar" ref={workWrap} style={{ display: 'none' }}>
                 <i ref={workBar} />
               </div>
-              {votesAgainst > 0 && <div className="tally">{'✗'.repeat(votesAgainst)}</div>}
+              {votesAgainst > 0 && (
+                <div className="tally">
+                  {/* Each mark pops in as its ballot lands. */}
+                  {Array.from({ length: votesAgainst }, (_, i) => (
+                    <span key={i}>✗</span>
+                  ))}
+                </div>
+              )}
               <div className="name">
                 {fruit.name}
                 {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}

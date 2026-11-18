@@ -220,6 +220,10 @@ export interface SimState {
   focusId: string | null
   /** Ballots cast so far in a meeting: voter id to target id (or 'skip'). */
   votes: Record<string, string>
+  /** Paper ballots in the air or on the table, one per vote, in the order cast (real times). */
+  ballots: { voter: string; target: string; at: number }[]
+  /** Votes that have landed, per target (or 'skip'): the tally shown over each fruit. */
+  tally: Record<string, number>
   lightsOut: boolean
   /** Slow motion until this real time (performance.now()). */
   slowUntil: number
@@ -300,6 +304,8 @@ function freshState(g: Game) {
     reactions: {},
     focusId: null,
     votes: {},
+    ballots: [],
+    tally: {},
     lightsOut: false,
     slowUntil: 0,
     venting: {},

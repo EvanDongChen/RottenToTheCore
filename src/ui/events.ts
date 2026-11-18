@@ -8,6 +8,7 @@ import { carry, hold } from './clock'
 import { LOOKS } from '../components/fruitLooks'
 import { puff } from '../components/Dust'
 import { spray } from '../components/Spray'
+import { BALLOT_FLIGHT_MS } from '../components/Ballots'
 import { checkReplay } from './replay'
 import { alarm, babble, cheer, clang, gasp, horn, powerDown, slice, startParty, sulk, taskBeep, thud, voteTick, whirr } from './sfx'
 import { currentGame, fruitPositions, uiFruits, useSim } from './store'
@@ -94,7 +95,7 @@ export function syncFruits(game: Game) {
   const fruits = uiFruits(game).map((f) => (f.id === ejecting ? { ...f, alive: true } : f))
   // Vote crosses stay up for the ejection, then clear once roaming starts again.
   const clearVotes = game.phase === 'roam' && !ejecting && Object.keys(votes).length > 0
-  useSim.setState({ fruits, taskBar: taskBar(game), phase: game.phase, lightsOut: game.lightsOut, meltdownAt: game.meltdown?.until ?? null, lockedRoom: game.locked?.room ?? null, ...(clearVotes ? { votes: {} } : {}) })
+  useSim.setState({ fruits, taskBar: taskBar(game), phase: game.phase, lightsOut: game.lightsOut, meltdownAt: game.meltdown?.until ?? null, lockedRoom: game.locked?.room ?? null, ...(clearVotes ? { votes: {}, ballots: [], tally: {} } : {}) })
 }
 
 export function attach(game: Game) {
@@ -147,7 +148,7 @@ function handle(game: Game, e: SimEvent) {
         feed({ t: e.t, tab: 'meeting', text: `${n(e.caller)} called an emergency meeting.` })
       }
       const dead = Object.fromEntries(game.fruits.filter((f) => !f.alive).map((f) => [f.id, true]))
-      useSim.setState({ votes: {}, speech: {}, lookAt: {}, cleared: dead, splats: [], speaker: null, lightsOut: false, attack: null, ...(e.reason === 'emergency' && !quiet ? { buttonAt: performance.now() } : {}) })
+      useSim.setState({ votes: {}, ballots: [], tally: {}, speech: {}, lookAt: {}, cleared: dead, splats: [], speaker: null, lightsOut: false, attack: null, ...(e.reason === 'emergency' && !quiet ? { buttonAt: performance.now() } : {}) })
       if (!quiet) walkIn(game)
       syncFruits(game)
       break
@@ -238,8 +239,15 @@ function handle(game: Game, e: SimEvent) {
       say(game, e.who, `🤫 ${e.say}`, e.to)
       break
     case 'vote':
-      useSim.setState((s) => ({ votes: { ...s.votes, [e.voter]: e.target } }))
-      sfx(voteTick)
+      // The voter points, and a ballot flies over; the tally ticks up when it lands.
+      useSim.setState((s) => ({ votes: { ...s.votes, [e.voter]: e.target }, ballots: quiet ? s.ballots : [...s.ballots, { voter: e.voter, target: e.target, at: performance.now() }] }))
+      if (quiet) useSim.setState((s) => ({ tally: { ...s.tally, [e.target]: (s.tally[e.target] ?? 0) + 1 } }))
+      else
+        setTimeout(() => {
+          if (game !== currentGame()) return
+          useSim.setState((s) => ({ tally: { ...s.tally, [e.target]: (s.tally[e.target] ?? 0) + 1 } }))
+          sfx(voteTick)
+        }, BALLOT_FLIGHT_MS / Math.sqrt(useSim.getState().speed))
       feed({ t: e.t, tab: 'meeting', text: `${n(e.voter)} votes ${e.target === 'skip' ? 'to skip' : `for ${n(e.target)}`}${e.reason ? `: "${e.reason}"` : ''}` })
       break
     case 'eject': {
@@ -299,6 +307,8 @@ export function rebuild(game: Game) {
     splats: game.bodies.map((b, i) => ({ id: b.id, x: b.pos[0], z: b.pos[1], kind: game.fruits.find((f) => f.id === b.id)!.def.kind, size: 1.4, seed: i })),
     juice: game.stats.ejections.length,
     votes: {},
+    ballots: [],
+    tally: {},
     speech: {},
     reactions: {},
     card: null,

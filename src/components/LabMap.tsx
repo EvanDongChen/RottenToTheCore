@@ -10,6 +10,7 @@ import type { Vec2 } from '../sim/types'
 import { puff } from './Dust'
 import { useSim } from '../ui/store'
 import MeetingTable from './MeetingTable'
+import Ballots from './Ballots'
 import TaskStations, { PROP_SPOTS } from './TaskStation'
 import TaskTools from './TaskTools'
 
@@ -93,6 +94,7 @@ export default function LabMap() {
       ))}
 
       <MeetingTable />
+      <Ballots />
       <TaskStations />
       <TaskTools />
       <LockedDoors />

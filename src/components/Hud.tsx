@@ -38,7 +38,7 @@ export default function Hud() {
   const card = useSim((s) => s.card)
   const selected = useSim((s) => s.selected)
   const revealRoles = useSim((s) => s.revealRoles)
-  const votes = useSim((s) => s.votes)
+  const tally = useSim((s) => s.tally)
   const problem = useSim((s) => s.problem)
   const meltdownAt = useSim((s) => s.meltdownAt)
   const views = useSim(useShallow((s) => Object.fromEntries(VIEWS.map((v) => [v.key, s[v.key]])) as Record<Toggle, boolean>))
@@ -68,7 +68,7 @@ export default function Hud() {
     return () => window.removeEventListener('keydown', key)
   }, [])
 
-  const voteCount = (id: string) => Object.values(votes).filter((v) => v === id).length
+  const voteCount = (id: string) => tally[id] ?? 0
 
   return (
     <>
