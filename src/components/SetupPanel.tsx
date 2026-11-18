@@ -89,6 +89,33 @@ export default function SetupPanel() {
         </div>
       )}
 
+      <div className="row start">
+        <button
+          className="primary"
+          title={needsKey ? 'No API key: the LLM brain will play as the Bayesian brain' : ''}
+          onClick={() => {
+            unlockAudio()
+            startGame()
+          }}
+        >
+          Start the game
+        </button>
+        <button onClick={() => file.current?.click()}>Load a replay</button>
+        <input
+          ref={file}
+          type="file"
+          accept=".jsonl,.json,.txt"
+          hidden
+          onChange={async (e) => {
+            const f = e.target.files?.[0]
+            if (!f) return
+            setFileError(replayFromText(await f.text()))
+            e.target.value = ''
+          }}
+        />
+      </div>
+      {fileError && <p className="hint error">{fileError}</p>}
+
       <h3>Rules</h3>
       <div className="rules">
         <label>
@@ -208,33 +235,6 @@ export default function SetupPanel() {
           </li>
         ))}
       </ul>
-
-      <div className="row start">
-        <button
-          className="primary"
-          title={needsKey ? 'No API key: the LLM brain will play as the Bayesian brain' : ''}
-          onClick={() => {
-            unlockAudio()
-            startGame()
-          }}
-        >
-          Start the game
-        </button>
-        <button onClick={() => file.current?.click()}>Load a replay</button>
-        <input
-          ref={file}
-          type="file"
-          accept=".jsonl,.json,.txt"
-          hidden
-          onChange={async (e) => {
-            const f = e.target.files?.[0]
-            if (!f) return
-            setFileError(replayFromText(await f.text()))
-            e.target.value = ''
-          }}
-        />
-      </div>
-      {fileError && <p className="hint error">{fileError}</p>}
     </aside>
   )
 }

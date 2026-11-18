@@ -2377,11 +2377,9 @@ button.on {
   font-size: 11px;
 }
 
+/* Right under the brains, so a game can start without scrolling past the rules and roster. */
 .setup .start {
-  position: sticky;
-  bottom: -16px;
-  padding: 10px 0 4px;
-  background: var(--paper);
+  margin-top: 14px;
 }
 
 .hint.error {
