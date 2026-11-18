@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { bayesianBeliefs, reachable } from '../src/sim/brains/bayesian'
+import { bayesianBeliefs } from '../src/sim/brains/bayesian'
+import { deathWindow, indexMemory, reachable } from '../src/sim/brains/reasoning'
 import { createGame, runFor } from '../src/sim/engine'
 import type { Memory } from '../src/sim/view'
 import { viewFor } from '../src/sim/view'
@@ -22,11 +23,13 @@ describe('Bayesian brain', () => {
     const far: Memory = { id: 1, kind: 'seen', who: 'x', room: 'security', from: 70, to: 100, confidence: 1, halfLife: 60, now: 1 }
     const near: Memory = { ...far, id: 2, who: 'y', room: 'electrical' }
     Object.defineProperty(view, 'memory', { value: [far, near] })
-    // A body found in Electrical at t=100; the victim was never seen, so the window is the last 90 s.
+    // A body found in Electrical at t=100; the victim was never seen, so it could have died any time before.
     const body = { victim: 'v', room: 'electrical', found: 100 }
-    const x = reachable(view, 'x', body)
-    const y = reachable(view, 'y', body)
-    const z = reachable(view, 'z', body)
+    const index = indexMemory(view)
+    const window = deathWindow(view, body)
+    const x = reachable('x', body, index, window)
+    const y = reachable('y', body, index, window)
+    const z = reachable('z', body, index, window)
     expect(x.open).toBeLessThan(0.5)
     // Seen in the body's own room is no alibi at all.
     expect(y.open).toBe(1)

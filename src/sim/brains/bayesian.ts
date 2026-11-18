@@ -1,17 +1,16 @@
-import { WALK_SPEED } from '../constants'
-import { AREAS, centre } from '../map'
-import { walkDistance } from '../nav'
 import type { Rng } from '../rng'
-import type { FruitView, Memory } from '../view'
+import type { FruitView } from '../view'
 import { crewRoam } from './crew'
+import { deathWindow, indexMemory, knownBodies, provenRotten, reachable, rottenLeft, storyBreaks, trustScores } from './reasoning'
 import { HeuristicBrain, tallySoFar } from './heuristic'
 import { crewSpeak, crewVote, rottenSpeak, rottenVote } from './speak'
 import type { Ballot, BrainKind, MeetingLine, MeetingView, RoamAction } from './types'
 
 /**
  * The strongest non-LLM player. It keeps P(Rotten) for every other living fruit and updates it
- * from evidence with fixed likelihood ratios, each weighted by how sure the memory is (so bent
- * memories mislead it too). On top, for every body it checks who could have reached it in time.
+ * from evidence with likelihood ratios, each weighted by how sure the memory is (so bent memories
+ * mislead it too). On top: who could have reached each body in time, whose stories changed, how
+ * far each teller's word goes, and (with two Rotten) which pairs cover for each other.
  */
 
 /** Likelihood ratios: how much more likely each piece of evidence is if the fruit is Rotten. Tune here. */
@@ -31,7 +30,14 @@ export const LIKELIHOOD = {
   noAlibi: 1.4,
   /** Spoke up for a fruit that turned out to be Rotten. */
   defendedRotten: 3,
-} as const
+  /** Told two different stories about the same stretch of time, in front of everyone. */
+  storyBreak: 6,
+  /** What a Rotten's word is worth: its accusations point at crew, its vouches at its partner. */
+  liarAccuses: 0.7,
+  liarVouches: 2.5,
+  /** Two fruits that keep backing each other up, when there are two Rotten. */
+  pairBond: 1.8,
+}
 
 const VOTE_ABOVE = 0.55
 const ACCUSE_ABOVE = 0.5
@@ -40,94 +46,35 @@ const MAX_P = 0.99
 /** Raise a likelihood ratio to a confidence: a 50% memory moves belief half as far (in log odds). */
 const weighted = (lr: number, c: number) => Math.pow(lr, Math.max(0, Math.min(1, c)))
 
-/** Where each living fruit is public knowledge to be crew (ejected and confirmed, or dead). */
-function rottenLeft(view: FruitView): number {
-  const caught = view.public.filter((e) => e.kind === 'eject' && e.role === 'rotten').length
-  return Math.max(0, view.rules.rotten - caught)
+/** What a told thing would be worth from an honest teller. */
+function toldRatio(told: string | undefined): number {
+  switch (told) {
+    case 'kill':
+      return LIKELIHOOD.kill
+    case 'vented':
+      return LIKELIHOOD.vented
+    case 'nearBody':
+      return LIKELIHOOD.nearBody
+    case 'fakeTask':
+      return LIKELIHOOD.fakeTask
+    case 'accuse':
+      return LIKELIHOOD.accusedByTrusted
+    case 'vouch':
+      return LIKELIHOOD.vouchedByTrusted
+  }
+  return 1
 }
-
-interface Body {
-  victim: string
-  room: string
-  /** When it was found (the meeting it was reported in). */
-  found: number
-}
-
-/** Bodies this fruit knows about, with where and when they were found. */
-function knownBodies(view: FruitView): Body[] {
-  const out: Body[] = []
-  for (const e of view.public) if (e.kind === 'meeting' && e.victim && e.room) out.push({ victim: e.victim, room: e.room, found: e.t })
-  return out
-}
-
-/** Seconds of walking between every pair of areas, by their centres. Worked out once. */
-const TRAVEL: Record<string, Record<string, number>> = Object.fromEntries(
-  AREAS.map((x) => [x.id, Object.fromEntries(AREAS.map((y) => [y.id, x === y ? 0 : walkDistance(centre(x.rect), centre(y.rect)) / WALK_SPEED]))]),
-)
-const travel = (a: string, b: string) => TRAVEL[a]?.[b] ?? 0
 
 /**
- * Could `who` have been at the body at some moment in the kill window? Each sighting of it
- * elsewhere rules out the times it could not have walked there from where it was seen.
- * Returns the share of the window left open (0: cleared, 1: no alibi at all), weighted by confidence.
+ * P(Rotten) for every other living fruit. Evidence moves each fruit's log odds by a likelihood
+ * ratio weighted by how sure the memory is. Then:
+ *  - hearsay is weighed as a mixture: the teller is either honest (the ratio as told) or Rotten
+ *    (a lie: an accusation then points away, a vouch towards a partner), by how likely it is to be
+ *    Rotten itself, and by its track record (trust);
+ *  - for every body, who could have got there while the victim could have died;
+ *  - stories that changed between meetings;
+ *  - with two Rotten, every pair is scored together, so two fruits covering for each other stand out.
  */
-export function reachable(view: FruitView, who: string, body: Body, index = indexMemory(view)): { open: number; confidence: number } {
-  // The kill happened after the victim was last seen alive (by this fruit) and before it was found.
-  const lastAlive = Math.max(...(index.seen.get(body.victim) ?? []).map((m) => m.to), body.found - 90)
-  const w0 = Math.min(lastAlive, body.found - 2)
-  const w1 = body.found
-  const blocks: [number, number, number][] = []
-  for (const { m, weight } of index.about.get(who) ?? []) {
-    const slack = travel(m.room, body.room)
-    // Seen in the body's own room, or nowhere near the kill window, tells nothing here.
-    if (slack === 0 || m.to + slack < w0 || m.from - slack > w1) continue
-    blocks.push([m.from - slack, m.to + slack, m.now * weight])
-  }
-  if (!blocks.length) return { open: 1, confidence: 1 }
-  // How much of the window is covered by any block, and how sure those blocks are.
-  const steps = 30
-  let open = 0
-  let sure = 0
-  for (let i = 0; i < steps; i++) {
-    const t = w0 + ((i + 0.5) / steps) * (w1 - w0)
-    let best = -1
-    for (const [a, b, c] of blocks) if (t >= a && t <= b && c > best) best = c
-    if (best < 0) open++
-    else sure += best
-  }
-  return { open: open / steps, confidence: steps - open > 0 ? sure / (steps - open) : 1 }
-}
-
-/** Memories that place each fruit somewhere, grouped by fruit, built once per update. */
-interface MemoryIndex {
-  /** Direct sightings of each fruit. */
-  seen: Map<string, Memory[]>
-  /** Everything that says where each fruit was, with how much to trust it. */
-  about: Map<string, { m: Memory; weight: number }[]>
-}
-
-export function indexMemory(view: FruitView): MemoryIndex {
-  const seen = new Map<string, Memory[]>()
-  const about = new Map<string, { m: Memory; weight: number }[]>()
-  const put = (who: string, m: Memory, weight: number) => {
-    if (!about.has(who)) about.set(who, [])
-    about.get(who)!.push({ m, weight })
-  }
-  for (const m of view.memory) {
-    if (m.kind === 'seen' || m.kind === 'passed' || m.kind === 'atTask') {
-      if (!seen.has(m.who)) seen.set(m.who, [])
-      seen.get(m.who)!.push(m)
-      put(m.who, m, 1)
-    } else if (m.kind === 'heard' && m.told === 'alibi') {
-      // Its own word counts for little (the Rotten lie); others vouching for where it was count fully.
-      if (m.source === m.who) put(m.who, m, 0.25)
-      else put(m.who, m, 1)
-      for (const w of m.with ?? []) if (w !== m.source) put(w, m, 1)
-    }
-  }
-  return { seen, about }
-}
-
 export function bayesianBeliefs(view: FruitView): Record<string, number> {
   const living = view.others.filter((o) => o.alive)
   const out: Record<string, number> = {}
@@ -146,22 +93,28 @@ export function bayesianBeliefs(view: FruitView): Record<string, number> {
   const add = (id: string, lr: number) => {
     if (id in logOdds) logOdds[id] += Math.log(lr)
   }
-  // A first pass, used as trust in what others say: trust = 1 - P(they are Rotten).
-  const firstTrust = () => 1 - Math.min(0.9, prior)
+  const breaks = storyBreaks(view)
+  const trust = trustScores(view, breaks)
 
+  // 1. What it saw with its own eyes, and the public record.
   for (const m of view.memory) {
-    if (!(m.who in logOdds)) continue
-    evidence(m, add, firstTrust)
+    if (!(m.who in logOdds) || m.kind === 'heard') continue
+    if (m.kind === 'kill') add(m.who, weighted(LIKELIHOOD.kill, m.now))
+    else if (m.kind === 'vented') add(m.who, weighted(LIKELIHOOD.vented, m.now))
+    else if (m.kind === 'nearBody') add(m.who, weighted(LIKELIHOOD.nearBody, m.now))
+    else if (m.kind === 'fakeTask') add(m.who, weighted(LIKELIHOOD.fakeTask, m.now))
   }
-  // Each time it was caught out counts, up to three.
+  // Each time it was caught out counts, up to three; so does every story that changed.
   for (const [id, n] of Object.entries(view.caught)) add(id, Math.pow(LIKELIHOOD.caught, Math.min(3, n)))
+  for (const [id, b] of breaks) add(id, Math.pow(LIKELIHOOD.storyBreak, Math.min(2, b.length)))
   for (const id of view.tailedBy) add(id, LIKELIHOOD.tailed)
 
-  // Who could have reached each body in time?
-  const index = indexMemory(view)
+  // Who could have reached each body while the victim could have died?
+  const index = indexMemory(view, trust)
   for (const body of knownBodies(view)) {
+    const window = deathWindow(view, body, trust)
     for (const o of living) {
-      const r = reachable(view, o.id, body, index)
+      const r = reachable(o.id, body, index, window)
       if (r.open === 0) add(o.id, weighted(LIKELIHOOD.unreachable, r.confidence))
       else if (r.open === 1) add(o.id, LIKELIHOOD.noAlibi)
       else add(o.id, 0.4 + 0.6 * r.open)
@@ -169,74 +122,92 @@ export function bayesianBeliefs(view: FruitView): Record<string, number> {
   }
 
   // Fruits that spoke up for a Rotten who was then ejected look like its partner.
-  const caughtRotten = new Set(view.public.filter((e) => e.kind === 'eject' && e.role === 'rotten').map((e) => (e.kind === 'eject' ? e.who : '')))
+  const caughtRotten = provenRotten(view)
   if (caughtRotten.size) {
     for (const e of view.public) {
       if (e.kind === 'line' && e.target && caughtRotten.has(e.target) && (e.move === 'vouch' || e.move === 'corroborate')) add(e.who, LIKELIHOOD.defendedRotten)
     }
   }
 
-  for (const id of view.cleared) if (id in logOdds) logOdds[id] = Math.log(LIKELIHOOD.visualTask)
-  // Turn odds into probabilities that add up to the Rotten still out there. With one left this is
-  // exact: each fruit's odds over everyone's. With more, scale every odds by the same factor until
-  // the probabilities sum to the count.
-  const odds = Object.fromEntries(Object.entries(logOdds).map(([id, l]) => [id, Math.exp(Math.max(-30, Math.min(30, l)))]))
-  const ids = Object.keys(odds)
-  let p: Record<string, number>
-  if (left === 1) {
-    const total = ids.reduce((a, id) => a + odds[id], 0)
-    p = Object.fromEntries(ids.map((id) => [id, odds[id] / total]))
-  } else {
-    const sum = (k: number) => ids.reduce((a, id) => a + (k * odds[id]) / (1 + k * odds[id]), 0)
-    let lo = 1e-12
-    let hi = 1e12
-    for (let i = 0; i < 80; i++) {
-      const mid = Math.sqrt(lo * hi)
-      if (sum(mid) > left) hi = mid
-      else lo = mid
-    }
-    p = Object.fromEntries(ids.map((id) => [id, (lo * odds[id]) / (1 + lo * odds[id])]))
+  // 2. Hearsay, weighed by how likely each teller is to be lying. A first look at the odds so far
+  // says how likely each teller is to be Rotten.
+  const first = normalise(logOdds, left)
+  for (const m of view.memory) {
+    if (m.kind !== 'heard' || !(m.who in logOdds) || m.told === 'alibi') continue
+    const honest = toldRatio(m.told)
+    if (honest === 1) continue
+    const liar = m.source && m.source !== view.id ? (first[m.source] ?? 0) : 0
+    const lie = m.told === 'vouch' ? (left >= 2 ? LIKELIHOOD.liarVouches : 1) : LIKELIHOOD.liarAccuses
+    const record = m.source ? (trust[m.source] ?? 0.75) : 1
+    // How sure the memory is already carries how far it was trusted when heard; the record now adds to it.
+    const c = Math.min(1, m.now * 0.8 * (0.5 + record * 0.5))
+    add(m.who, (1 - liar) * weighted(honest, c) + liar * weighted(lie, c))
   }
-  for (const id of ids) out[id] = Math.round(Math.min(MAX_P, p[id]) * 1000) / 1000
+
+  for (const id of view.cleared) if (id in logOdds) logOdds[id] = Math.log(LIKELIHOOD.visualTask)
+  // 3. With two Rotten left, score each pair: fruits that keep backing each other up go together.
+  const p = left === 2 && living.length > 2 ? pairs(view, logOdds) : normalise(logOdds, left)
+  for (const id of Object.keys(p)) out[id] = Math.round(Math.min(MAX_P, p[id]) * 1000) / 1000
   return out
 }
 
-/** One memory's effect on the odds. */
-function evidence(m: Memory, add: (id: string, lr: number) => void, trust: () => number) {
-  const c = m.now
-  switch (m.kind) {
-    case 'kill':
-      add(m.who, weighted(LIKELIHOOD.kill, c))
-      break
-    case 'vented':
-      add(m.who, weighted(LIKELIHOOD.vented, c))
-      break
-    case 'nearBody':
-      add(m.who, weighted(LIKELIHOOD.nearBody, c))
-      break
-    case 'fakeTask':
-      add(m.who, weighted(LIKELIHOOD.fakeTask, c))
-      break
-    case 'heard': {
-      // Hearsay counts as far as the teller is trusted (its confidence already carries that).
-      const lr =
-        m.told === 'kill'
-          ? LIKELIHOOD.kill
-          : m.told === 'vented'
-            ? LIKELIHOOD.vented
-            : m.told === 'nearBody'
-              ? LIKELIHOOD.nearBody
-              : m.told === 'fakeTask'
-                ? LIKELIHOOD.fakeTask
-                : m.told === 'accuse'
-                  ? LIKELIHOOD.accusedByTrusted
-                  : m.told === 'vouch'
-                    ? LIKELIHOOD.vouchedByTrusted
-                    : 1
-      if (lr !== 1) add(m.who, weighted(lr, c * (m.source ? trust() : 1) * 0.8))
-      break
+/**
+ * Turn odds into probabilities that add up to the Rotten still out there. With one left this is
+ * exact: each fruit's odds over everyone's. With more, scale every odds by the same factor until
+ * the probabilities sum to the count.
+ */
+function normalise(logOdds: Record<string, number>, left: number): Record<string, number> {
+  const odds = Object.fromEntries(Object.entries(logOdds).map(([id, l]) => [id, Math.exp(Math.max(-30, Math.min(30, l)))]))
+  const ids = Object.keys(odds)
+  if (left <= 1) {
+    const total = ids.reduce((a, id) => a + odds[id], 0)
+    return Object.fromEntries(ids.map((id) => [id, odds[id] / total]))
+  }
+  const sum = (k: number) => ids.reduce((a, id) => a + (k * odds[id]) / (1 + k * odds[id]), 0)
+  let lo = 1e-12
+  let hi = 1e12
+  for (let i = 0; i < 80; i++) {
+    const mid = Math.sqrt(lo * hi)
+    if (sum(mid) > left) hi = mid
+    else lo = mid
+  }
+  return Object.fromEntries(ids.map((id) => [id, (lo * odds[id]) / (1 + lo * odds[id])]))
+}
+
+/**
+ * Two Rotten: the chance of each pair being the two, from both fruits' odds and how much they
+ * have backed each other (vouching, corroborating, naming each other in alibis); fruits that went
+ * after each other are less likely partners. Each fruit's chance is the sum over the pairs it is in.
+ */
+function pairs(view: FruitView, logOdds: Record<string, number>): Record<string, number> {
+  const ids = Object.keys(logOdds)
+  const bond = new Map<string, number>()
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
+  const bump = (a: string, b: string, n: number) => {
+    if (a !== b && a in logOdds && b in logOdds) bond.set(key(a, b), (bond.get(key(a, b)) ?? 0) + n)
+  }
+  for (const e of view.public) {
+    if (e.kind !== 'line' || !e.target) continue
+    if (e.move === 'vouch' || e.move === 'corroborate') bump(e.who, e.target, 1)
+    else if (e.move === 'accuse' || e.move === 'hardClaim' || e.move === 'contradict') bump(e.who, e.target, -1)
+    if (e.claim?.kind === 'where') for (const w of e.claim.with ?? []) bump(e.who, w, 0.5)
+  }
+  for (const m of view.memory) if (m.kind === 'heard' && m.told === 'alibi' && m.source === m.who) for (const w of m.with ?? []) bump(m.who, w, 0.5)
+  const odds = Object.fromEntries(ids.map((id) => [id, Math.exp(Math.max(-30, Math.min(30, logOdds[id])))]))
+  const p: Record<string, number> = Object.fromEntries(ids.map((id) => [id, 0]))
+  let total = 0
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const b = Math.max(-2, Math.min(3, bond.get(key(ids[i], ids[j])) ?? 0))
+      const w = odds[ids[i]] * odds[ids[j]] * Math.pow(LIKELIHOOD.pairBond, b)
+      p[ids[i]] += w
+      p[ids[j]] += w
+      total += w
     }
   }
+  // Each pair counts towards both its fruits, so the chances add up to two.
+  for (const id of ids) p[id] = total > 0 ? p[id] / total : 2 / ids.length
+  return p
 }
 
 export class BayesianBrain extends HeuristicBrain {
@@ -247,15 +218,8 @@ export class BayesianBrain extends HeuristicBrain {
     super(id, rng)
   }
 
-  private cache: { time: number; key: string; beliefs: Record<string, number> } | null = null
-
-  /** Worked out afresh when the evidence changes, or every couple of sim seconds as memories fade. */
   override beliefs(view: FruitView): Record<string, number> {
-    const key = `${view.memory.length}|${view.public.length}|${Object.keys(view.caught).length}|${view.tailedBy.length}|${view.cleared.length}`
-    if (this.cache && this.cache.key === key && view.time - this.cache.time < 2) return this.cache.beliefs
-    const beliefs = bayesianBeliefs(view)
-    this.cache = { time: view.time, key, beliefs }
-    return beliefs
+    return this.cached(view, bayesianBeliefs)
   }
 
   override roam(view: FruitView): RoamAction {

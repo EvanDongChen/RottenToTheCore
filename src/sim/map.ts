@@ -159,6 +159,14 @@ export function area(id: string): Area {
   return AREA_BY_ID.get(id)!
 }
 
+/** The same place, or a hallway and one of its rooms (people round them up). */
+export function samePlace(a: string, b: string) {
+  if (a === b) return true
+  const A = area(a)
+  const B = area(b)
+  return (!!A.hallway && A.hallway.includes(b as never)) || (!!B.hallway && B.hallway.includes(a as never))
+}
+
 export function isRoom(id: string): id is RoomId {
   return ROOMS.some((r) => r.id === id)
 }

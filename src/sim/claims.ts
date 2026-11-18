@@ -1,6 +1,6 @@
 import type { Claim } from './brains/types'
 import type { Game, SimFruit } from './engine'
-import { area } from './map'
+import { samePlace } from './map'
 import { confidence, recall } from './memory'
 import type { Sighting } from './memory'
 import { addSighting, nextDoor } from './witness'
@@ -18,14 +18,6 @@ const EDGE = 4
 /** Two time spans overlap, with a little slack for vague memories. */
 function overlaps(a0: number, a1: number, b0: number, b1: number, slack = 2) {
   return a0 <= b1 + slack && b0 <= a1 + slack
-}
-
-/** The same place, or a hallway and one of its rooms (people round them up). */
-function samePlace(a: string, b: string) {
-  if (a === b) return true
-  const A = area(a)
-  const B = area(b)
-  return (!!A.hallway && A.hallway.includes(b as never)) || (!!B.hallway && B.hallway.includes(a as never))
 }
 
 /**
