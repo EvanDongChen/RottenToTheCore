@@ -2102,11 +2102,58 @@ button.on {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(620px, calc(100vw - 32px));
+  width: min(780px, calc(100vw - 32px));
 }
 
-.replay-bar input[type='range'] {
+.replay-track {
+  position: relative;
   flex: 1;
+  display: flex;
+  padding-top: 22px;
+}
+
+.replay-track input[type='range'] {
+  flex: 1;
+}
+
+/* Markers sit over the track, each at its moment. */
+.replay-marks {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  height: 22px;
+  pointer-events: none;
+}
+
+.replay-marks .mark {
+  position: absolute;
+  translate: -50% 0;
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 50%;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.replay-marks .mark.kill {
+  background: #ffc4c9;
+}
+
+.replay-marks .mark.meeting {
+  background: #fff08a;
+}
+
+.replay-marks .mark.eject {
+  background: #ffd9a3;
+}
+
+.replay-marks .mark:hover {
+  z-index: 1;
+  scale: 1.2;
 }
 
 .badge {

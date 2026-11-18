@@ -5,7 +5,7 @@ import { hashLog } from '../sim/log'
 import type { ReplaySetup, SimEvent } from '../sim/log'
 import { rebuild } from './events'
 import { currentGame, useSim } from './store'
-import type { Replay } from './store'
+import type { Replay, ReplayMark } from './store'
 
 /**
  * Replays. A game without the LLM is fully decided by its setup (seed, roster, rules, brains),
@@ -19,10 +19,25 @@ function lengthOf(log: readonly SimEvent[]): number {
   return log.reduce((m, e) => Math.max(m, e.t), 0)
 }
 
+/** The moments worth jumping to: every kill, meeting and ejection, named for the timeline. */
+export function marksOf(log: readonly SimEvent[]): ReplayMark[] {
+  const names = new Map<string, string>()
+  const start = log[0]
+  if (start?.kind === 'start') for (const f of start.roster) names.set(f.id, f.name)
+  const n = (id: string) => names.get(id) ?? id
+  const marks: ReplayMark[] = []
+  for (const e of log) {
+    if (e.kind === 'kill') marks.push({ t: e.t, kind: 'kill', label: `${n(e.killer)} kills ${n(e.victim)}` })
+    else if (e.kind === 'meeting') marks.push({ t: e.t, kind: 'meeting', label: e.reason === 'body' ? `${n(e.caller)} reports ${e.victim ? n(e.victim) : 'a body'}` : `${n(e.caller)} calls a meeting` })
+    else if (e.kind === 'eject') marks.push({ t: e.t, kind: 'eject', label: `${n(e.who)} goes in the Juicer` })
+  }
+  return marks
+}
+
 /** Replay the game on screen from the start: the same setup, played again. */
 export function replayThisGame() {
   const game = currentGame()
-  start(game.setup, { from: 'game', length: lengthOf(game.log) })
+  start(game.setup, { from: 'game', length: lengthOf(game.log), marks: marksOf(game.log) })
 }
 
 /** Load a JSON-lines event log (from `npm run sim -- --log file`) and replay it. */
@@ -33,7 +48,7 @@ export function replayFromText(text: string): string | null {
     .map((l) => JSON.parse(l) as SimEvent)
   const startEvent = log[0]
   if (!startEvent || startEvent.kind !== 'start' || !startEvent.setup) return 'That file is not a Rotten to the Core event log.'
-  start(startEvent.setup, { from: 'file', length: lengthOf(log), expectHash: hashLog(log) })
+  start(startEvent.setup, { from: 'file', length: lengthOf(log), expectHash: hashLog(log), marks: marksOf(log) })
   return null
 }
 

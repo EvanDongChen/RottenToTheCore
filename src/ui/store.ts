@@ -153,6 +153,12 @@ export interface Shot {
 }
 
 /** A replay being watched: the same game played again from its setup. */
+export interface ReplayMark {
+  t: number
+  kind: 'kill' | 'meeting' | 'eject'
+  label: string
+}
+
 export interface Replay {
   /** Where it came from: this game, or a log file. */
   from: 'game' | 'file'
@@ -162,6 +168,8 @@ export interface Replay {
   expectHash?: string
   /** Set once the replay reaches the end: whether it matched the log exactly. */
   verified?: boolean
+  /** Moments to jump to on the timeline: kills, meetings and ejections. */
+  marks: ReplayMark[]
 }
 
 export interface Card {
