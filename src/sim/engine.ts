@@ -296,7 +296,10 @@ export function nameOf(game: Game, id: string): string {
   return fruitById(game, id)?.def.name ?? id
 }
 
-/** Crew tasks done and in total (ghosts' tasks count too). */
+/**
+ * Crew tasks done and in total. A dead fruit's tasks stay on the bar: with ghost tasks on its
+ * ghost can still finish them; with them off they stay undone, so the crew must win by votes.
+ */
 export function taskBar(game: Game): { done: number; total: number } {
   let done = 0
   let total = 0
@@ -335,7 +338,7 @@ export function step(game: Game) {
   encounters(game)
   // 5. Roam decisions, at most once per sim second per fruit. Dead crew keep doing tasks as ghosts.
   for (const f of game.fruits) {
-    if (game.time >= f.decideAt && (f.alive || f.role === 'crew') && game.phase === 'roam') decide(game, f)
+    if (game.time >= f.decideAt && (f.alive || (f.role === 'crew' && game.rules.ghostTasks)) && game.phase === 'roam') decide(game, f)
   }
   // 6. Work, kills, reports, vents and sabotage.
   resolveActions(game)

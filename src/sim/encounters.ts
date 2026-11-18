@@ -28,6 +28,8 @@ const TASK_CHAT_CHANCE = 0.012
 const LINE_GAP = 1.5
 /** A fruit noticing it has been tailed this long gets scared. */
 const TAILED_NOTICE = 6
+/** A follower closer than this is keeping company, not tailing. */
+const TAIL_MIN = 3.5
 
 /** A line waiting to be said, a moment after the one before it. */
 export interface QueuedLine {
@@ -67,6 +69,7 @@ export function encounters(game: Game) {
   sayQueued(game)
   lightsReaction(game)
   noticeTails(game)
+  whispers(game)
 
   const living = game.fruits.filter((f) => f.alive && game.time >= f.busyUntil)
   for (let i = 0; i < living.length; i++) {
@@ -310,7 +313,8 @@ function noticeTails(game: Game) {
     if (!f.alive || f.action.kind !== 'follow') continue
     const target = fruitById(game, f.action.who)!
     const key = `${f.id}>${target.id}`
-    if (!target.alive || !sees(game, target.id, f.id)) {
+    // Walking right alongside is company; only one that hangs back and keeps watching is a tail.
+    if (!target.alive || !sees(game, target.id, f.id) || dist(f.pos, target.pos) < TAIL_MIN) {
       tails.delete(key)
       continue
     }
@@ -328,4 +332,42 @@ function noticeTails(game: Game) {
 export function clearChats(game: Game) {
   queue(game).length = 0
   for (const f of game.fruits) f.talkingTo = null
+}
+
+/** Two Rotten whisper again no sooner than this. */
+const WHISPER_COOLDOWN = 45
+
+const WHISPER_PLAN = [
+  'You take {target}. I\'ll stand with the others.',
+  '{target} is wandering about alone. Yours.',
+  'I\'ll stay where they can see me. Get {target}.',
+]
+const WHISPER_OK = ['Got it.', 'Leave it to me.', 'Say no more.', 'Heh. Fine.']
+const WHISPER_CARE = ["And don't vouch for me too often. They notice.", 'Keep your story straight this time.', 'Not near the vents. Too obvious.']
+
+/**
+ * Two Rotten alone together whisper a plan: one kills, the other stands with witnesses. Only the
+ * viewer hears it. It changes nothing in the sim beyond the log; their brains already split the
+ * work (the one with the lower id strikes while the other stays in view).
+ */
+function whispers(game: Game) {
+  const rotten = game.fruits.filter((f) => f.alive && f.role === 'rotten')
+  if (rotten.length < 2) return
+  const [a, b] = rotten
+  const key = `whisper|${a.id}|${b.id}`
+  if ((game.encounterAt.get(key) ?? -Infinity) + WHISPER_COOLDOWN > game.time) return
+  if (!sees(game, a.id, b.id) || dist(a.pos, b.pos) > 4) return
+  // Nobody else in sight of either of them.
+  const others = (f: SimFruit) => [...(game.vision.sees.get(f.id) ?? [])].filter((id) => id !== a.id && id !== b.id)
+  if (others(a).length || others(b).length) return
+  game.encounterAt.set(key, game.time)
+  const [killer, cover] = a.id < b.id ? [a, b] : [b, a]
+  const crew = game.fruits.filter((f) => f.alive && f.role === 'crew')
+  const target = crew.length ? cover.rng.pick(crew) : null
+  const lines = [
+    { who: cover, to: killer, say: target ? cover.rng.pick(WHISPER_PLAN).replace('{target}', target.def.name) : 'Lie low for now.' },
+    { who: killer, to: cover, say: killer.rng.pick(WHISPER_OK) },
+    { who: cover, to: killer, say: cover.rng.pick(WHISPER_CARE) },
+  ]
+  for (const l of lines) logEvent(game, { t: round(game.time), kind: 'whisper', who: l.who.id, to: l.to.id, say: l.say })
 }

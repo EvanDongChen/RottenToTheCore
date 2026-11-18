@@ -4,5 +4,5 @@
 import { spawnSync } from 'node:child_process'
 
 const cwd = process.cwd().replace(/^[a-z]:/, (drive) => drive.toUpperCase())
-const result = spawnSync('npx', ['vitest', 'run', ...process.argv.slice(2)], { cwd, stdio: 'inherit', shell: true })
+const result = spawnSync('npx', ['vitest', 'run', '--testTimeout=60000', ...process.argv.slice(2)], { cwd, stdio: 'inherit', shell: true })
 process.exit(result.status ?? 1)

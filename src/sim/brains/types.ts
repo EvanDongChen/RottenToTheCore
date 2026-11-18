@@ -27,8 +27,10 @@ export const BRAIN_KINDS: BrainKind[] = ['heuristic', 'bayesian', 'llm']
 
 export type RoamAction =
   | { kind: 'goTask'; station: string }
-  | { kind: 'wander'; room: string }
-  | { kind: 'follow'; who: string }
+  /** Walk to a random spot in a room; `hurry` walks faster (and looks it). */
+  | { kind: 'wander'; room: string; hurry?: boolean }
+  /** Follow at about `gap` units (default 2.5): close for company, far back for stalking. */
+  | { kind: 'follow'; who: string; gap?: number }
   | { kind: 'report'; body: string }
   | { kind: 'emergency' }
   | { kind: 'fixSabotage' }

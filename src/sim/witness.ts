@@ -18,8 +18,8 @@ const WATCH_TO_NOTICE = 2
 const FAKE_OVERSTAY = 3
 /** Within this of a body counts as near it. */
 const NEAR_BODY = 4
-/** Seen in a room this recently before a body turns up there counts as near it too. */
-const LOOK_BACK = 20
+/** Seen leaving a room this recently before a body turns up there counts as near it too. */
+const LOOK_BACK = 6
 /** Two walkers this close, heading opposite ways, have passed each other. */
 const PASS_DISTANCE = 2
 const PASS_COOLDOWN = 10
@@ -152,7 +152,8 @@ export function observe(game: Game) {
         // Who was in that room shortly before? They were near the body, as far as a's memory goes.
         const recent = new Set(
           a.memory
-            .filter((m) => m.kind === 'seen' && m.room === body.area && m.to >= game.time - LOOK_BACK && m.who !== bodyId && !inView.has(m.who))
+            // Seen there shortly before, and gone since: it left the room the body is in.
+            .filter((m) => m.kind === 'seen' && m.room === body.area && m.to >= game.time - LOOK_BACK && m.to < game.time - 1 && m.who !== bodyId && !inView.has(m.who))
             .map((m) => m.who),
         )
         for (const who of recent) {

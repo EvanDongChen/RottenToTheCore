@@ -11,7 +11,7 @@ export const DEFAULT_RULES: Rules = {
   longTasks: 2,
   shortTaskTime: 4,
   longTaskTime: 12,
-  killCooldown: 25,
+  killCooldown: 20,
   killRange: 1.5,
   crewVision: 6,
   rottenVision: 8,
@@ -19,6 +19,7 @@ export const DEFAULT_RULES: Rules = {
   emergencyMeetings: 1,
   discussionTurns: 12,
   confirmEjects: true,
+  ghostTasks: false,
 }
 
 /** Most Rotten a game of this size can hold while still being outnumbered at the start. */

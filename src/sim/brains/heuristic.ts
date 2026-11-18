@@ -16,12 +16,12 @@ import type { Ballot, Brain, ChatContext, ChatLine, MeetingLine, MeetingView, Ro
 const SCORE = {
   kill: 10,
   vented: 8,
-  nearBody: 1.2,
+  nearBody: 0.9,
   fakeTask: 1,
   caught: 1.2,
-  accused: 0.35,
+  accused: 0.3,
   vouched: -0.3,
-  heardHard: 1.5,
+  heardHard: 1.2,
 }
 const VOTE_ABOVE = 0.6
 

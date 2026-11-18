@@ -83,4 +83,6 @@ export interface Rules {
   emergencyMeetings: number
   discussionTurns: number
   confirmEjects: boolean
+  /** Dead crew keep doing their tasks as ghosts, as in Among Us. Makes task wins faster. */
+  ghostTasks: boolean
 }

@@ -188,7 +188,7 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
     if (meeting.body) {
       const say = fill(rng.pick(FOUND), { victim: n(meeting.body.victim), room: placeName(meeting.body.room) })
       if (hard) return { move: 'hardClaim', target: hard.who, claim: claimOf(hard), say: `${say} ${fill(rng.pick(HARD), { name: n(hard.who), deed: deed(claimOf(hard), n) })}` }
-      const near = view.memory.filter((m) => m.kind === 'nearBody' && m.victim === meeting.body!.victim && m.now > 0.4 && meeting.living.includes(m.who)).sort((a, b) => b.now - a.now)[0]
+      const near = view.memory.filter((m) => m.kind === 'nearBody' && m.victim === meeting.body!.victim && m.now > 0.6 && meeting.living.includes(m.who)).sort((a, b) => b.now - a.now)[0]
       if (near) return { move: 'accuse', target: near.who, claim: claimOf(near), say: `${say} ${fill(rng.pick(FOUND_NEAR), { name: n(near.who) })}` }
       return { move: 'report', say }
     }
@@ -323,6 +323,15 @@ export function rottenSpeak(view: FruitView, meeting: MeetingView, rng: Rng): Me
 /** A Rotten votes with a crowd against a crew fruit, never for its partner, or skips to stay quiet. */
 export function rottenVote(view: FruitView, meeting: MeetingView, rng: Rng, tally: Record<string, number>): Ballot {
   const crew = meeting.living.filter((id) => id !== view.id && !view.partners.includes(id))
+  // The vote is going against it (or its partner): back the runner-up to force a tie.
+  const ours = [view.id, ...view.partners]
+  const leader = Object.entries(tally).sort((a, b) => b[1] - a[1])[0]
+  if (leader && ours.includes(leader[0])) {
+    const runnerUp = Object.entries(tally)
+      .filter(([id]) => crew.includes(id) && tally[id] === leader[1] - 1)
+      .sort((a, b) => b[1] - a[1])[0]
+    if (runnerUp) return { target: runnerUp[0], reason: 'No. It is them, not me.' }
+  }
   const crowd = Object.entries(tally)
     .filter(([id]) => crew.includes(id))
     .sort((a, b) => b[1] - a[1])[0]

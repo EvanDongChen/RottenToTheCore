@@ -180,6 +180,7 @@ export function setAction(game: Game, f: SimFruit, a: RoamAction) {
       break
     case 'wander':
       walkTo(f, randomSpot(f.rng, a.room))
+      if (a.hurry) f.hurryUntil = game.time + 8
       break
     case 'report': {
       const body = game.bodies.find((b) => b.id === a.body)
@@ -230,10 +231,10 @@ export function resolveActions(game: Game) {
           f.decideAt = game.time
           break
         }
-        if (game.tick % CHASE_REPLAN === 0 && sees(game, f.id, t.id)) {
-          if (dist(f.pos, t.pos) > FOLLOW_GAP) walkTo(f, t.pos)
-          else stop(f)
-        }
+        const gap = Math.max(1.5, Math.min(8, a.gap ?? FOLLOW_GAP))
+        // Close enough: stop at once, every tick, so a stalker never creeps into view.
+        if (dist(f.pos, t.pos) <= gap) stop(f)
+        else if (game.tick % CHASE_REPLAN === 0 && sees(game, f.id, t.id)) walkTo(f, t.pos)
         break
       }
       case 'kill': {
