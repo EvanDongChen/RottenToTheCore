@@ -249,3 +249,9 @@ export function stopParty() {
 export function voteTick() {
   tone(880, 0, 0.08, 'triangle', 0.08)
 }
+
+/** The blender: a motor winding up to a scream, with a grinding buzz on top. */
+export function whirr(seconds: number) {
+  tone(90, 0, seconds, 'sawtooth', 0.05, 420)
+  tone(180, 0, seconds, 'square', 0.02, 900)
+}

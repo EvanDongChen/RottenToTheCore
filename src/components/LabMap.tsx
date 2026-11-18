@@ -11,6 +11,7 @@ import { puff } from './Dust'
 import { useSim } from '../ui/store'
 import MeetingTable from './MeetingTable'
 import TaskStations, { PROP_SPOTS } from './TaskStation'
+import TaskTools from './TaskTools'
 
 const WALL_THICKNESS = 0.32
 const WALL_COLOR = '#ffffff'
@@ -93,6 +94,7 @@ export default function LabMap() {
 
       <MeetingTable />
       <TaskStations />
+      <TaskTools />
       <LockedDoors />
       <MeltdownPanels />
     </group>

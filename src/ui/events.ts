@@ -9,7 +9,7 @@ import { LOOKS } from '../components/fruitLooks'
 import { puff } from '../components/Dust'
 import { spray } from '../components/Spray'
 import { checkReplay } from './replay'
-import { alarm, babble, cheer, clang, gasp, horn, powerDown, slice, startParty, sulk, taskBeep, thud, voteTick } from './sfx'
+import { alarm, babble, cheer, clang, gasp, horn, powerDown, slice, startParty, sulk, taskBeep, thud, voteTick, whirr } from './sfx'
 import { currentGame, fruitPositions, uiFruits, useSim } from './store'
 import type { FeedEntry, Shot, SimState } from './store'
 
@@ -312,10 +312,14 @@ export function rebuild(game: Game) {
 
 /** Where an ejected fruit is taken: the Juicer's mouth, or the compost bin in the Greenhouse. */
 const JUICER_MOUTH: Vec2 = [0, -15.2]
+/** Just in front of the blender's base. */
+const JUICER_FRONT: Vec2 = [0, -16.4]
 /** The press's hopper, which the ejected fruit jumps into. */
 const HOPPER: Vec2 = [0, -17.6]
 /** Real milliseconds from the jump into the hopper to the press coming down. */
 const JUMP_IN_MS = 900
+/** Real milliseconds (at 1x) the fruit spins in the blender before it comes out as juice. */
+const BLEND_MS = 2000
 /** How fast fruits waddle in to a meeting, in world units per sim second. */
 const WALK_IN_SPEED = 9
 /** Real milliseconds a fruit takes to climb into a vent before it pops out of the other end. */
@@ -335,7 +339,8 @@ function ejectOnScreen(game: Game, who: string, role: Role, votes: number) {
     .filter((f) => f.alive)
     .sort((a, b) => Math.hypot(a.pos[0] - out.pos[0], a.pos[1] - out.pos[1]) - Math.hypot(b.pos[0] - out.pos[0], b.pos[1] - out.pos[1]))
     .slice(0, 2)
-  const paths: Record<string, Vec2[]> = { [who]: findPath(out.pos, dest, 0) }
+  // The ejected fruit is carried right up to the blender, ready to hop in.
+  const paths: Record<string, Vec2[]> = { [who]: findPath(out.pos, compost ? dest : JUICER_FRONT, 0) }
   const from: Record<string, Vec2> = { [who]: out.pos }
   carriers.forEach((c, i) => {
     const side = i ? 1.1 : -1.1
@@ -345,12 +350,19 @@ function ejectOnScreen(game: Game, who: string, role: Role, votes: number) {
   useSim.setState({ ejecting: who, speaker: null, lookAt: Object.fromEntries(carriers.map((c) => [c.id, who])) })
   carry(paths, from, () => {
     if (game !== currentGame()) return
-    // In it goes: a jump up into the hopper (the compost bin), then the press comes down.
+    // In it goes: a jump up into the blender jar (or the compost bin), where it spins to juice.
     const color = LOOKS[out.def.kind].flesh
-    useSim.setState({ juicing: { id: who, at: performance.now() } })
-    hold(who, compost ? COMPOST : HOPPER, JUMP_IN_MS / Math.sqrt(useSim.getState().speed))
+    const spinMs = compost ? 0 : BLEND_MS
+    useSim.setState({ juicing: { id: who, at: performance.now() }, blending: null })
+    // Kept over the jar until the juice is poured, with a little to spare.
+    hold(who, compost ? COMPOST : HOPPER, (JUMP_IN_MS + spinMs) / useSim.getState().speed + 400)
     laterSim(game, JUMP_IN_MS / 1000, () => {
-      if (!compost) useSim.setState({ slamAt: performance.now() })
+      if (compost) return
+      const speed = useSim.getState().speed
+      useSim.setState({ blending: { at: performance.now(), ms: BLEND_MS / speed, color: LOOKS[out.def.kind].color } })
+      sfx(() => whirr(BLEND_MS / 1000 / speed))
+    })
+    laterSim(game, (JUMP_IN_MS + spinMs) / 1000, () => {
       spray(dest[0], compost ? dest[1] : HOPPER[1], compost ? '#6b4a2b' : color, 1.6, compost ? 0.6 : 1.6)
       burst(compost ? 'PLOP!' : 'SPLORT!', dest[0], dest[1])
       sfx(slice)

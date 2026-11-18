@@ -48,7 +48,7 @@ export default function Director() {
       distance = shot.kind === 'kill' ? (shotAge < KILL_CLOSE_MS ? CLOSE * 0.8 : CLOSE * 1.6) : CLOSE
     } else if (sim.juicing) {
       // Into the Juicer: frame the press as it comes down.
-      want.set(JUICER_PRESS[0], 1, JUICER_PRESS[1] + 2)
+      want.set(JUICER_PRESS[0], 1.8, JUICER_PRESS[1] + 2)
       distance = CLOSE * 1.2
     } else if (sim.party) {
       want.set(0, 1, 0)
@@ -62,7 +62,7 @@ export default function Director() {
       distance = sim.ejecting ? CLOSE * 1.5 : TABLE_SHOT
       // Nearly there: settle on the press ahead of the jump.
       if (sim.ejecting && at && Math.hypot(at.x - JUICER_PRESS[0], at.z - JUICER_PRESS[1]) < 9) {
-        want.set(JUICER_PRESS[0], 1, JUICER_PRESS[1] + 2)
+        want.set(JUICER_PRESS[0], 1.8, JUICER_PRESS[1] + 2)
         distance = CLOSE * 1.2
       }
     } else {

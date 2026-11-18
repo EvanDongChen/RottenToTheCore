@@ -54,7 +54,7 @@ export function overridden(id: string) {
 }
 
 /** How long, in real ms, a meeting will wait past its time for an ejection to finish on screen. */
-const ANIMATION_GRACE_MS = 6000
+const ANIMATION_GRACE_MS = 9000
 
 /** Slow motion: real time runs at this share until `slowUntil`. */
 const SLOW = 0.25

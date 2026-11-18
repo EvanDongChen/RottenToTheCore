@@ -230,7 +230,8 @@ export interface SimState {
   /** When the emergency button was last pressed (real ms), for the press animation. */
   buttonAt: number
   /** When the Juicer's press last came down (real ms). */
-  slamAt: number
+  /** The blender running: when it started and how long it spins, in real milliseconds. */
+  blending: { at: number; ms: number; color: string } | null
   /** Sim time a meltdown goes off, if one is going. */
   meltdownAt: number | null
   /** A room locked by sabotage. */
@@ -304,7 +305,7 @@ function freshState(g: Game) {
     venting: {},
     juicing: null,
     buttonAt: 0,
-    slamAt: 0,
+    blending: null,
     meltdownAt: null,
     lockedRoom: null,
   }

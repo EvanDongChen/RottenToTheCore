@@ -131,6 +131,8 @@ export default function Fruit({ id }: { id: string }) {
   const body = useRef<RapierRigidBody>(null)
   const visual = useRef<Group>(null)
   const overlay = useRef<Group>(null)
+  /** The name tag's element: an Html overlay ignores its group's visibility, so it is hidden directly. */
+  const tagEl = useRef<HTMLDivElement>(null)
   const armMeshes = useRef<(Mesh | null)[]>([null, null, null, null])
   // Per arm: [elbow, hand]. Seeded on the first frame once the body position is known.
   const arms = useRef<ArmPoint[][] | null>(null)
@@ -397,7 +399,7 @@ export default function Fruit({ id }: { id: string }) {
     const sim = currentGame().fruits.find((f) => f.id === id)
     // Busy at a station, the fuse box or a meltdown panel: arms pump, body bobs.
     const busy = alive && !!sim && !sim.path.length && (sim.working !== null || sim.action.kind === 'fixSabotage')
-    const { squeeze, lift } = squeezeFor(st, id, now)
+    const { squeeze, lift, spin, tilt, tucked } = squeezeFor(st, id, now)
 
     // Squash and stretch from vertical speed.
     if (visual.current) {
@@ -407,12 +409,15 @@ export default function Fruit({ id }: { id: string }) {
       visual.current.position.x = mood === 'shake' ? Math.sin(now * 0.09) * 0.035 : 0
       // Working fruits bob in time with their arms; climbing into a vent sinks, jumping into the Juicer rises.
       visual.current.position.y = (busy ? Math.abs(Math.sin(now * 0.011)) * 0.06 : 0) + lift
+      // Spinning in the blender.
+      visual.current.rotation.set(0, spin, tilt)
     }
-    const hidden = squeeze < 0.35
+    const hidden = squeeze < 0.35 || tucked
     if (limbs.current) limbs.current.visible = !chop && !hidden
     if (overlay.current) {
       overlay.current.position.set(t.x, t.y + 1.15, t.z)
       overlay.current.visible = !hidden
+      if (tagEl.current) tagEl.current.style.visibility = hidden ? 'hidden' : ''
     }
 
     // The work bar: real progress for crew. A Rotten never gets one, but shows "faking" when roles are revealed.
@@ -639,7 +644,7 @@ export default function Fruit({ id }: { id: string }) {
         {/* Once a fruit is dead its ghost carries the name tag instead. */}
         {alive && (
           <Html center zIndexRange={[10, 0]}>
-            <div className="fruit-tag">
+            <div className="fruit-tag" ref={tagEl}>
               {speechText && (
                 <div className="bubble">
                   <RichText text={speechText} />
@@ -684,29 +689,65 @@ export default function Fruit({ id }: { id: string }) {
  * through a vent (a hop, sinking into the hatch, then popping out of the other) and for jumping
  * into the Juicer's hopper.
  */
-function squeezeFor(st: SimState, id: string, now: number): { squeeze: number; lift: number } {
+function squeezeFor(st: SimState, id: string, now: number): Squeeze {
   const v = st.venting[id]
   if (v) {
     const age = now - v.at
     if (age < v.inMs) {
       const p = age / v.inMs
       // A little hop, then down into the hole.
-      if (p < 0.3) return { squeeze: 1, lift: Math.sin((p / 0.3) * Math.PI) * 0.45 }
+      if (p < 0.3) return still(1, Math.sin((p / 0.3) * Math.PI) * 0.45)
       const sink = (p - 0.3) / 0.7
-      return { squeeze: Math.max(0, 1 - sink), lift: -sink * 0.9 }
+      return still(Math.max(0, 1 - sink), -sink * 0.9)
     }
     const out = (age - v.inMs) / (v.inMs * 0.8)
     // Out of the other hatch with a springy pop.
-    if (out < 1) return { squeeze: Math.min(1.15, out * 1.3 + Math.sin(out * Math.PI) * 0.15), lift: Math.sin(out * Math.PI) * 0.5 }
+    if (out < 1) return still(Math.min(1.15, out * 1.3 + Math.sin(out * Math.PI) * 0.15), Math.sin(out * Math.PI) * 0.5)
   }
   if (st.juicing?.id === id) {
-    const age = now - st.juicing.at
-    const p = Math.min(1, age / 900)
-    // Up and over into the hopper, shrinking away inside.
-    return { squeeze: p < 0.45 ? 1 : Math.max(0, 1 - (p - 0.45) / 0.4), lift: Math.sin(p * Math.PI) * 1.6 }
+    if (st.settings.ejectStyle === 'compost') {
+      const p = Math.min(1, (now - st.juicing.at) / 900)
+      // Up and over into the bin, shrinking away inside.
+      return still(p < 0.45 ? 1 : Math.max(0, 1 - (p - 0.45) / 0.4), Math.sin(p * Math.PI) * 1.6)
+    }
+    const b = st.blending
+    if (b) {
+      // In the jar: the blades wind up, the fruit whirls faster and faster and wears away to juice.
+      const age = now - b.at
+      const q = Math.min(1, age / b.ms)
+      return {
+        squeeze: JAR_SCALE * (1 - q ** 2.4),
+        lift: JAR_LIFT + Math.abs(Math.sin(age * 0.03)) * 0.12 * (1 - q),
+        spin: q * q * 70,
+        tilt: Math.sin(age * 0.045) * 0.35 * Math.min(1, q * 3),
+        tucked: true,
+      }
+    }
+    // A hop up and over the rim, tucking in to fit the jar.
+    const p = Math.min(1, ((now - st.juicing.at) * st.speed) / 900)
+    const shrink = Math.max(0, (p - 0.5) / 0.5)
+    return { squeeze: 1 - (1 - JAR_SCALE) * shrink, lift: p * JAR_LIFT + Math.sin(p * Math.PI) * 1.3, spin: p * Math.PI, tilt: 0, tucked: p > 0.6 }
   }
-  return { squeeze: 1, lift: 0 }
+  return still(1, 0)
 }
+
+interface Squeeze {
+  squeeze: number
+  lift: number
+  /** Turn about the vertical, and lean to the side, while it spins in the blender. */
+  spin: number
+  tilt: number
+  /** Legs and arms tucked away, and no name tag, while it is in the jar. */
+  tucked: boolean
+}
+
+function still(squeeze: number, lift: number): Squeeze {
+  return { squeeze, lift, spin: 0, tilt: 0, tucked: false }
+}
+
+/** How small a fruit shrinks to fit the blender jar, and how high the jar holds it. */
+const JAR_SCALE = 0.55
+const JAR_LIFT = 1.15
 
 /** Where a working fruit looks: the prop behind its station. */
 function workFacing(id: string): Vec2 | null {

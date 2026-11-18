@@ -5,6 +5,7 @@ import type { Group, Mesh, MeshBasicMaterial, MeshStandardMaterial } from 'three
 import { FUSE_BOX, MELTDOWN_PANELS, MONITORS, station, STATIONS } from '../sim/map'
 import type { Vec2 } from '../sim/types'
 import { currentGame, useSim } from '../ui/store'
+import Blender from './Blender'
 
 /**
  * Every room's props, built from simple shapes and set against the walls, clear of the doors and
@@ -193,7 +194,7 @@ function Prop({ kind }: { kind: Kind }) {
         </>
       )
     case 'press':
-      return <JuicerPress />
+      return <Blender />
     case 'crates':
       return (
         <>
@@ -525,57 +526,6 @@ function RipeningPanels() {
         </group>
       ))}
     </>
-  )
-}
-
-/** The fruit press: its plunger pumps while someone juices a batch, and slams down on an ejection. */
-function JuicerPress() {
-  const plunger = useRef<Group>(null)
-  useFrame(() => {
-    if (!plunger.current) return
-    const now = performance.now()
-    const slam = now - useSim.getState().slamAt
-    const working = currentGame().fruits.some((f) => f.working === 'juice' && f.role === 'crew')
-    let y = 0
-    // A slam: straight down, a shudder, then back up.
-    if (slam >= 0 && slam < 1400) y = slam < 160 ? -(slam / 160) * 0.55 : slam < 700 ? -0.55 + Math.sin(slam * 0.08) * 0.03 : -0.55 * (1 - (slam - 700) / 700)
-    else if (working) y = -Math.abs(Math.sin(now * 0.006)) * 0.35
-    plunger.current.position.y = 1.65 + y
-  })
-  return (
-    <>
-      <Box size={[1.6, 1.3, 1]} at={[0, 0.65, 0]} color="#e9edf2" />
-      {/* The hopper on top, where the fruit goes in. */}
-      <mesh castShadow position={[0, 1.42, 0]}>
-        <cylinderGeometry args={[0.7, 0.45, 0.25, 18, 1, true]} />
-        <meshStandardMaterial color="#9aa4b2" side={DoubleSide} />
-      </mesh>
-      <group ref={plunger}>
-        <Cyl r={0.55} h={0.25} at={[0, 0, 0]} color="#6b7480" />
-        <Cyl r={0.08} h={1.2} at={[0, 0.6, 0]} color="#9aa4b2" />
-      </group>
-      {/* The spout, over the cup that fills while a batch is juiced. */}
-      <Box size={[0.25, 0.08, 0.4]} at={[-0.85, 1.05, 0]} color="#9aa4b2" />
-      <JuiceGlass />
-    </>
-  )
-}
-
-/** The Juicer's big glass: it fills a little more with every fruit that goes in. */
-function JuiceGlass() {
-  const juice = useSim((s) => s.juice)
-  const level = Math.min(1, 0.15 + juice * 0.22)
-  return (
-    <group position={[1.15, 0, 0]}>
-      <mesh position={[0, 0.4, 0]}>
-        <cylinderGeometry args={[0.24, 0.2, 0.8, 16, 1, true]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.35} side={DoubleSide} />
-      </mesh>
-      <mesh position={[0, (0.78 * level) / 2 + 0.01, 0]}>
-        <cylinderGeometry args={[0.21, 0.19, 0.78 * level, 16]} />
-        <meshStandardMaterial color="#ffb03a" />
-      </mesh>
-    </group>
   )
 }
 
