@@ -1540,6 +1540,9 @@ button.roster-row.on {
 
 .fruit-tag .name {
   position: relative;
+  /* Set per frame from the distance to the camera. */
+  scale: var(--tag-size, 1);
+  transform-origin: center bottom;
   display: flex;
   align-items: center;
   gap: 5px;

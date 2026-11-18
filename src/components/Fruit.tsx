@@ -18,6 +18,10 @@ import { anchors, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShap
 import RichText from './RichText'
 
 // Body
+/** Name tags: full size up to this far from the camera, shrinking over the next stretch, never below the least size. */
+const TAG_NEAR = 22
+const TAG_FALLOFF = 40
+const TAG_MIN = 0.62
 const HOVER_HEIGHT = 1.0 // body centre above the ground; the legs fill the gap
 const GRAVITY = 20
 
@@ -379,7 +383,7 @@ export default function Fruit({ id }: { id: string }) {
     b.applyTorqueImpulse({ x: inertia * v.torque.x * DT, y: inertia * v.torque.y * DT, z: inertia * v.torque.z * DT }, true)
   })
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const b = body.current
     if (!b) return
     const t = b.translation()
@@ -417,7 +421,16 @@ export default function Fruit({ id }: { id: string }) {
     if (overlay.current) {
       overlay.current.position.set(t.x, t.y + 1.15, t.z)
       overlay.current.visible = !hidden
-      if (tagEl.current) tagEl.current.style.visibility = hidden ? 'hidden' : ''
+      if (tagEl.current) {
+        tagEl.current.style.visibility = hidden ? 'hidden' : ''
+        // Far from the camera the tag shrinks and fades a little, so a crowd far off stays readable.
+        // The selected fruit, and anyone talking, keeps a full-size tag.
+        const far = state.camera.position.distanceTo(v.pos)
+        const keep = st.selected === id || !!st.speech[id]
+        const size = keep ? 1 : Math.max(TAG_MIN, Math.min(1, 1 - (far - TAG_NEAR) / TAG_FALLOFF))
+        tagEl.current.style.setProperty('--tag-size', size.toFixed(2))
+        tagEl.current.style.opacity = keep ? '' : String(Math.min(1, 0.45 + size * 0.6).toFixed(2))
+      }
     }
 
     // The work bar: real progress for crew. A Rotten never gets one, but shows "faking" when roles are revealed.
