@@ -364,7 +364,7 @@ export const useSim = create<SimState>((set, get) => {
     speed: 1,
     revealRoles: false,
     showThoughts: false,
-    director: true,
+    director: false,
     cones: false,
     arrows: false,
     problem: null,
