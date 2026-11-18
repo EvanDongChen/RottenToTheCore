@@ -42,7 +42,16 @@ Replies are cached by a hash of the prompt (`results/llm-cache.json`), so re-run
 
 Every matchup below plays the same seeds. Full tables, including memory and pacing numbers, are in [RESULTS.md](RESULTS.md).
 
-<!-- results -->
+5,000 seeded games per matchup:
+
+| Matchup | Games | Crew win | Rotten win | Draw | By tasks | By ejection | By kills |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| bayesian crew vs bayesian Rotten | 5000 | 79.4% | 19.3% | 1.3% | 1.3% | 78.1% | 19.3% |
+| bayesian crew vs heuristic Rotten | 5000 | 79.4% | 19.3% | 1.3% | 1.3% | 78.1% | 19.3% |
+| heuristic crew vs bayesian Rotten | 5000 | 61.5% | 35.7% | 2.8% | 1.5% | 60.1% | 35.7% |
+| heuristic crew vs heuristic Rotten | 5000 | 61.5% | 35.7% | 2.8% | 1.5% | 60.1% | 35.7% |
+
+The Bayesian crew win about 18 points more often than the heuristic crew, mostly by catching the Rotten in meetings. (A Bayesian Rotten plays exactly like a heuristic one: the brains differ only in how the crew reason, so those rows match.)
 
 ## How it's built
 
