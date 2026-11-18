@@ -42,16 +42,22 @@ Replies are cached by a hash of the prompt (`results/llm-cache.json`), so re-run
 
 Every matchup below plays the same seeds. Full tables, including memory and pacing numbers, are in [RESULTS.md](RESULTS.md).
 
-5,000 seeded games per matchup:
+2,000 seeded games per matchup:
 
 | Matchup | Games | Crew win | Rotten win | Draw | By tasks | By ejection | By kills |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| bayesian crew vs bayesian Rotten | 5000 | 79.4% | 19.3% | 1.3% | 1.3% | 78.1% | 19.3% |
-| bayesian crew vs heuristic Rotten | 5000 | 79.4% | 19.3% | 1.3% | 1.3% | 78.1% | 19.3% |
-| heuristic crew vs bayesian Rotten | 5000 | 61.5% | 35.7% | 2.8% | 1.5% | 60.1% | 35.7% |
-| heuristic crew vs heuristic Rotten | 5000 | 61.5% | 35.7% | 2.8% | 1.5% | 60.1% | 35.7% |
+| bayesian crew vs bayesian Rotten | 2000 | 80.1% | 18.2% | 1.8% | 0.8% | 79.3% | 18.2% |
+| bayesian crew vs heuristic Rotten | 2000 | 79.3% | 19.0% | 1.8% | 0.7% | 78.5% | 19.0% |
+| heuristic crew vs bayesian Rotten | 2000 | 53.3% | 45.4% | 1.4% | 1.6% | 51.7% | 45.4% |
+| heuristic crew vs heuristic Rotten | 2000 | 55.8% | 42.8% | 1.5% | 1.6% | 54.2% | 42.8% |
 
-The Bayesian crew win about 18 points more often than the heuristic crew, mostly by catching the Rotten in meetings. (A Bayesian Rotten plays exactly like a heuristic one: the brains differ only in how the crew reason, so those rows match.)
+The Bayesian crew win about 24 points more often than the heuristic crew. They vote more often and act on the endgame, so they also eject more crew by mistake: their ejections are less accurate (74% against 86%), but far fewer games run out of time. The thinking Bayesian Rotten wins about 3 points more than the heuristic one against heuristic crew, and makes no real difference against Bayesian crew.
+
+### Calibration
+
+`npm run calibrate -- --games 1000` plays Bayesian crew games and records every crew fruit's P(Rotten) for every other fruit at every vote, next to the truth. It fits each clue's likelihood ratio from how often that clue points at a Rotten rather than crew (shrunk toward 1, since clues come in bunches), plays the same games again with the fitted table, and saves it (`--write`) only if it scores better. The fitted table brought the Brier score from 0.1076 to 0.1065 (always guessing the base rate scores 0.162), and mostly fixed the hand-picked table's underconfidence in the middle:
+
+![Reliability: what the brain said against how often it was right](docs/calibration.svg)
 
 ## How it's built
 
@@ -77,10 +83,30 @@ src/headless/   the CLI and the results report
 
 **Brains only see a view.** A brain is handed `viewFor(fruit)`: its own memory (with bending applied and no sign of it), tasks, what it can see right now, and the public meeting log. A test checks that no crew view ever holds anyone else's role. Every brain must return something legal; the engine repairs it rather than throw.
 
-**The Bayesian brain** keeps P(Rotten) for every other fruit, updated from a likelihood table weighted by each memory's confidence, and for every body asks who could have walked there within the kill window given where it last saw them.
+**Both crew brains** reason from the same clues (`brains/reasoning.ts`):
+- **When each victim died.** The window runs from when it was last known alive (seen, voting, or named in a trusted alibi) to when it was found. Who could have walked there in that window?
+- **Trust.** Being caught lying, changing a story, accusing fruits that turned out crew, or defending one that turned out Rotten all cost a fruit its credibility. Alibis its own eyes confirmed earn it back.
+- **Stories that must hold up.** Every alibi said in any meeting is public. Two for the same stretch of time that name different places get called out, and count heavily.
+- **The endgame.** When a skip or a wrong ejection plus one more kill would lose the game, the crew vote for their best guess.
+
+**Meetings argue.** A fruit defending itself names a witness ("Ask Kiwi"), who then backs the story up or says it saw otherwise. The Bayesian brain asks pointed questions ("Where were you at 1:20?") about the moment the victim most likely died, choosing the fruit whose answer would tell it most.
+
+**The heuristic brain** adds its clues up, weighted by personality. Suspicious fruits read more into everything, the gullible believe what they hear, and the stubborn don't. Grudge-holders never forget who accused them. Only bold fruits vote on a hunch in the endgame.
+
+**The Bayesian brain** keeps P(Rotten) for every other fruit from a likelihood table fitted from games. It weighs hearsay as either honest or a Rotten's lie, depending on how likely the teller is to be Rotten. With two Rotten it scores every pair, so two fruits covering for each other stand out. It roams to learn, keeping an eye on whoever it is least sure about. As Rotten, it tracks who probably suspects it: it kills witnesses and accusers, keeps scapegoats alive, picks alibis nobody it saw could contradict, and never leans on its partner.
+
+**Personalities** are set per fruit on the setup screen, as in One Bad Apple:
+- an archetype to start from (Detective, Paranoid, Sheep, Loudmouth, Hothead, Wallflower, Contrarian)
+- five sliders
+- a temper
+- quirks, dragged on as chips or written yourself
+- a backstory
+- a Rotten playstyle: aggressive, patient, framer or saboteur
+
+They change how a fruit reasons, votes, strikes and talks.
 
 **The LLM brain** is measured, not trusted: calls, tokens, dollars, latency, illegal replies repaired, and hallucinated claims (a crew fruit claiming to have seen something that isn't in its own memory, checked in code).
 
 ## Notes on balance
 
-The plan's starting defaults are all in one `Rules` object on the setup screen. Two were changed after measuring 2,000 heuristic-vs-heuristic games: the kill cooldown is 20 s (was 25), and **ghosts don't finish tasks** by default (it's a toggle). With ghost tasks on, the crew win on tasks before the Rotten can do much (the Rotten win about 15%); with them off, the crew have to find the Rotten, and the Rotten win about 37%.
+The plan's starting defaults are all in one `Rules` object on the setup screen. Two were changed after measuring 2,000 heuristic-vs-heuristic games: the kill cooldown is 20 s (was 25), and **ghosts don't finish tasks** by default (it's a toggle). With ghost tasks on, the crew win on tasks before the Rotten can do much (the Rotten win about 15%); with them off, the crew have to find the Rotten, and the Rotten win about 37%. The deeper crew reasoning later made the crew much stronger (the Rotten fell to about 24%). Making endgame votes and grudges depend on personality brought the heuristic Rotten back to about 43%, inside the plan's 35–60% band.
