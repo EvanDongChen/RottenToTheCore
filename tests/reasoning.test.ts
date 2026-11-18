@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { bayesianBeliefs } from '../src/sim/brains/bayesian'
 import { deathWindow, grudges, mustVote, storyBreaks, trustScores } from '../src/sim/brains/reasoning'
 import { suspicionOfMe } from '../src/sim/brains/rottenMind'
-import { voice, witnessLine } from '../src/sim/brains/speak'
+import { believableFrame, voice, witnessLine } from '../src/sim/brains/speak'
+import { newPlan, rottenRoam } from '../src/sim/rotten'
 import type { Claim, MeetingView } from '../src/sim/brains/types'
 import { createGame } from '../src/sim/engine'
 import type { Game, PublicEvent } from '../src/sim/engine'
@@ -141,6 +142,36 @@ describe('the thinking Rotten', () => {
     game.public.push(line(60, accuser.id, 'accuse', bad[0].id))
     const s = suspicionOfMe(viewFor(game, bad[0]))
     expect(s[accuser.id]).toBeGreaterThan(s[quiet.id])
+  })
+})
+
+describe('the thinking Rotten, alone', () => {
+  it('leaves a station it is faking once the real task would be done, for a different one', () => {
+    const { game, bad } = setup()
+    const view = Object.assign(viewFor(game, bad[0]), { working: 'wipe', workSince: 0, time: 100, killReadyIn: 10 })
+    const plan = newPlan()
+    plan.faking = { station: 'wipe', until: 999 }
+    const tidy = rottenRoam(view, plan, makeRng(2), { tidy: true })
+    expect(tidy.kind).toBe('fakeTask')
+    expect((tidy as { station: string }).station).not.toBe('wipe')
+    // Without the habit it would have stayed put until its own deadline.
+    const plan2 = newPlan()
+    plan2.faking = { station: 'wipe', until: 999 }
+    expect((rottenRoam(view, plan2, makeRng(2)) as { station: string }).station).toBe('wipe')
+  })
+
+  it('frames the crew fruit it really saw at the kill, and blames the kill itself on a witness', () => {
+    const { game, crew, bad } = setup()
+    const me = bad[0]
+    const [witness, victim] = crew
+    me.kills.push({ victim: victim.id, time: 50, area: 'lab' })
+    me.memory.push({ id: 901, kind: 'seen', who: witness.id, room: 'lab', from: 48, to: 53, confidence: 1, halfLife: 600 })
+    game.time = 60
+    const living = game.fruits.filter((f) => f.alive && f !== victim).map((f) => f.id)
+    const story = believableFrame(viewFor(game, me), { reason: 'body', caller: me.id, body: { victim: victim.id, room: 'lab' }, step: 'report', lines: [], living, checks: [] })
+    expect(story?.who).toBe(witness.id)
+    expect(story?.hard).toBe(true)
+    expect(story?.claim).toMatchObject({ kind: 'saw', what: 'kill', room: 'lab', victim: victim.id })
   })
 })
 

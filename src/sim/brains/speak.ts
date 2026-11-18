@@ -1,5 +1,5 @@
 import { clock, describeClaim } from '../describe'
-import { area, placeName, samePlace } from '../map'
+import { area, neighbours, placeName, samePlace } from '../map'
 import type { Memory } from '../view'
 import type { FruitView } from '../view'
 import { alibiFor, isCareless } from '../rotten'
@@ -460,8 +460,40 @@ export function crewVote(view: FruitView, meeting: MeetingView, beliefs: Record<
 export interface RottenSpeech {
   /** Thinks before it speaks: careful alibis, no covering for its partner, frames whoever the table already doubts. */
   smart?: boolean
+  /** Frames with stories that fit what others saw, and turns a witness's accusation back on them. */
+  frame?: boolean
   /** How the table feels about each crew fruit, for picking a scapegoat. */
   table?: Record<string, number>
+}
+
+const COUNTER_KILL = ["That's a lie! I saw {name} do it!", 'No. {name} is the one I saw, standing over {victim}.', "Funny. I saw YOU, {name}, in {room} with {victim}."]
+
+/**
+ * A frame that holds up: a crew fruit it really saw near its latest kill, around then, so anyone
+ * else who saw that fruit there will back the story up. If someone was right there when it
+ * struck (probably a witness), it gets in first and claims that fruit did the killing.
+ */
+export function believableFrame(view: FruitView, meeting: MeetingView): { who: string; claim: Claim; hard: boolean } | null {
+  const k = view.kills.at(-1)
+  if (!k || (meeting.body && meeting.body.victim !== k.victim)) return null
+  const crew = meeting.living.filter((id) => id !== view.id && !view.partners.includes(id))
+  let best: { who: string; claim: Claim; hard: boolean; gap: number } | null = null
+  for (const m of view.memory) {
+    if ((m.kind !== 'seen' && m.kind !== 'passed' && m.kind !== 'atTask') || !crew.includes(m.who)) continue
+    const mid = (m.from + m.to) / 2
+    const gap = Math.abs(mid - k.time)
+    if (gap > 15) continue
+    const here = samePlace(m.room, k.area)
+    if (!here && !(neighbours(k.area) as string[]).includes(m.room)) continue
+    // Right there, right then: a witness, so blame the kill itself on it.
+    const hard = here && gap <= 6
+    const claim: Claim = hard
+      ? { kind: 'saw', what: 'kill', who: m.who, room: k.area, at: Math.round(k.time), victim: k.victim }
+      : { kind: 'saw', what: 'nearBody', who: m.who, room: m.room, at: Math.round(mid), victim: k.victim }
+    const score = gap - (hard ? 100 : 0)
+    if (!best || score < best.gap) best = { who: m.who, claim, hard, gap: score }
+  }
+  return best && { who: best.who, claim: best.claim, hard: best.hard }
 }
 
 /** Who to point the finger at: whoever is accusing it, or whoever the room already doubts. */
@@ -494,8 +526,13 @@ function rottenMove(view: FruitView, meeting: MeetingView, rng: Rng, opts: Rotte
   // Self-report: a confident, detailed story pinning it on someone else.
   if (meeting.step === 'report') {
     if (meeting.body) {
-      const frame = frameTarget(view, meeting, rng, opts.table)
       const say = fill(rng.pick(FOUND), { victim: n(meeting.body.victim), room: placeName(meeting.body.room) })
+      const story = opts.frame ? believableFrame(view, meeting) : null
+      if (story && rng.chance(framer ? 1 : 0.85)) {
+        if (story.hard) return { move: 'hardClaim', target: story.who, claim: story.claim, say: `${say} ${fill(rng.pick(HARD), { name: n(story.who), deed: deed(story.claim, n) })}` }
+        return { move: 'accuse', target: story.who, claim: story.claim, say: `${say} ${fill(rng.pick(FOUND_NEAR), { name: n(story.who) })}` }
+      }
+      const frame = frameTarget(view, meeting, rng, opts.table)
       if (frame && rng.chance(framer ? 0.95 : 0.4 + t.aggression * 0.4)) {
         const claim: Claim = { kind: 'saw', what: 'nearBody', who: frame, room: meeting.body.room, at: Math.round(view.time - 3), victim: meeting.body.victim }
         return { move: 'accuse', target: frame, claim, say: `${say} ${fill(rng.pick(FOUND_NEAR), { name: n(frame) })}` }
@@ -506,6 +543,14 @@ function rottenMove(view: FruitView, meeting: MeetingView, rng: Rng, opts: Rotte
   }
   const accuser = meeting.askedBy ?? onTheSpot(view, meeting)
   if (accuser && meeting.step !== 'roundup') {
+    // A witness says it saw the kill: claim to have seen the witness do it, same room, same time.
+    const witnessed = opts.frame ? [...meeting.lines].reverse().find((l) => l.line.target === view.id && l.line.move === 'hardClaim' && l.line.claim?.kind === 'saw' && l.line.claim.what === 'kill' && !view.partners.includes(l.who) && meeting.living.includes(l.who)) : undefined
+    const already = witnessed && meeting.lines.some((l) => l.who === view.id && l.line.move === 'hardClaim' && l.line.target === witnessed.who)
+    if (witnessed && !already && witnessed.line.claim?.kind === 'saw') {
+      const c = witnessed.line.claim
+      const claim: Claim = { kind: 'saw', what: 'kill', who: witnessed.who, room: c.room, at: c.at, victim: c.victim }
+      return { move: 'hardClaim', target: witnessed.who, claim, say: fill(rng.pick(COUNTER_KILL), { name: n(witnessed.who), victim: c.victim ? n(c.victim) : 'the body', room: placeName(c.room) }) }
+    }
     const counter = rng.chance(0.3 + t.aggression * 0.5) ? fill(rng.pick(COUNTER), { name: n(accuser) }) : ''
     return defence(view, meeting, {}, rng, counter, smart)
   }

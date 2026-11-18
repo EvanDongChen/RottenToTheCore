@@ -279,13 +279,14 @@ export class BayesianBrain extends HeuristicBrain {
   }
 
   override roam(view: FruitView): RoamAction {
-    // As Rotten it thinks about what the crew think of it: silence witnesses, keep scapegoats.
-    if (view.role === 'rotten') return rottenRoam(view, this.plan, this.rng, { bias: killBias(view) })
+    // As Rotten it thinks about what the crew think of it: silence witnesses, keep scapegoats,
+    // fake tasks for exactly as long as they take, and be seen with someone after a kill.
+    if (view.role === 'rotten') return rottenRoam(view, this.plan, this.rng, { bias: killBias(view), tidy: true, herd: true })
     return crewRoam(view, this.beliefs(view), this.rng, { tailAbove: 0.7, curious: worthWatching })
   }
 
   override async speak(view: FruitView, meeting: MeetingView): Promise<MeetingLine> {
-    if (view.role === 'rotten') return rottenSpeak(view, meeting, this.rng, { smart: true, table: tableSuspicion(view) })
+    if (view.role === 'rotten') return rottenSpeak(view, meeting, this.rng, { smart: true, frame: true, table: tableSuspicion(view) })
     return crewSpeak(view, meeting, this.beliefs(view), this.rng, { accuseAbove: ACCUSE_ABOVE, question: bestQuestion })
   }
 

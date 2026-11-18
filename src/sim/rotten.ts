@@ -46,6 +46,15 @@ export interface RottenPlan {
 export interface RottenOptions {
   /** Extra wish to kill each fruit it can see (a thinking Rotten silences witnesses). */
   bias?: (o: InSight) => number
+  /**
+   * Fakes tasks the way crew do them: never lingers at a station longer than the task takes,
+   * and never goes straight back to the station it just left.
+   */
+  tidy?: boolean
+  /** How likely it reports its own kill when someone was about to see it (the framer's opening). */
+  selfReport?: number
+  /** After a kill, goes looking for company to be seen with, for an alibi. */
+  herd?: boolean
 }
 
 /** A Rotten's playstyle, set on the setup screen: how it goes about the killing. */
@@ -130,9 +139,9 @@ function targetScore(view: FruitView, o: InSight): number {
  * A station to fake: near other fruits when blending, anywhere otherwise. A careful Rotten keeps
  * away from visual stations, where everyone can see that nothing happens.
  */
-function fakeStation(view: FruitView, rng: Rng, nearOthers: boolean): Station {
+function fakeStation(view: FruitView, rng: Rng, nearOthers: boolean, avoid?: string): Station {
   const careful = !isCareless(view)
-  const pool = STATIONS.filter((s) => !(careful && s.visual))
+  const pool = STATIONS.filter((s) => !(careful && s.visual) && s.id !== avoid)
   if (nearOthers && view.visible.length) {
     const crowded = view.visible.map((o) => o.area)
     const here = pool.filter((s) => crowded.includes(s.room))
@@ -141,9 +150,21 @@ function fakeStation(view: FruitView, rng: Rng, nearOthers: boolean): Station {
   return rng.pick(pool)
 }
 
-function fake(view: FruitView, plan: RottenPlan, rng: Rng, nearOthers: boolean): RoamAction {
-  if (!plan.faking || view.time >= plan.faking.until) {
-    const st = fakeStation(view, rng, nearOthers)
+/** How long a station's real task takes. */
+function taskTime(view: FruitView, st: Station) {
+  return st.length === 'short' ? view.rules.shortTaskTime : view.rules.longTaskTime
+}
+
+/** A tidy faker has stood at its station about as long as the real task would take: time to go. */
+function doneFaking(view: FruitView, plan: RottenPlan, tidy: boolean): boolean {
+  if (!tidy || !plan.faking || view.working !== plan.faking.station) return false
+  const st = STATIONS.find((x) => x.id === plan.faking!.station)
+  return !!st && view.time - view.workSince >= taskTime(view, st) * 0.85
+}
+
+function fake(view: FruitView, plan: RottenPlan, rng: Rng, nearOthers: boolean, tidy = false): RoamAction {
+  if (!plan.faking || view.time >= plan.faking.until || doneFaking(view, plan, tidy)) {
+    const st = fakeStation(view, rng, nearOthers, tidy ? (plan.faking?.station ?? view.working ?? undefined) : undefined)
     // Stay about as long as the real task would take, plus the walk there. Careless ones linger.
     const duration = st.length === 'short' ? view.rules.shortTaskTime : view.rules.longTaskTime
     const walk = dist(view.pos, st.at) / 2.6
@@ -171,7 +192,7 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng, opts: Ro
     const watchers = crew.length
     // Probably seen nearby: report it itself and lead the meeting with a confident story. A framer
     // does it whenever it can, to point the finger first.
-    const selfReport = style === 'framer' ? 0.8 : 0.25 + t.aggression * 0.4
+    const selfReport = style === 'framer' ? 0.8 : (opts.selfReport ?? 0.25 + t.aggression * 0.4)
     if ((watchers > 0 || style === 'framer') && rng.chance(selfReport)) go(plan, 'selfReport', now)
     else go(plan, 'escape', now)
   }
@@ -218,26 +239,28 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng, opts: Ro
     else {
       // Stand with a group, or work next to someone, so it was "with them".
       const friend = crew.sort((a, b) => dist(view.pos, a.pos) - dist(view.pos, b.pos))[0]
-      if (friend && rng.chance(0.5)) return { kind: 'follow', who: friend.id }
-      return fake(view, plan, rng, true)
+      if (friend && rng.chance(opts.herd ? 0.85 : 0.5)) return { kind: 'follow', who: friend.id }
+      // Nobody about: head for the busiest place it knows of, the Cafeteria, to be seen.
+      if (!friend && opts.herd && view.area !== 'cafeteria' && now - plan.since < ALIBI_TIME / 2) return { kind: 'wander', room: 'cafeteria' }
+      return fake(view, plan, rng, true, opts.tidy)
     }
   }
 
   if (plan.state === 'blend' || plan.state === 'sabotage') {
     if (ready && !cover) go(plan, 'stalk', now)
-    else return fake(view, plan, rng, true)
+    else return fake(view, plan, rng, true, opts.tidy)
   }
 
   // Stalking or striking.
   if (!ready) {
     go(plan, 'blend', now)
-    return fake(view, plan, rng, true)
+    return fake(view, plan, rng, true, opts.tidy)
   }
   const candidates = crew.filter((o) => (view.others.find((x) => x.id === o.id)?.alive ?? true))
   if (!candidates.length) {
     // Nobody in sight: go and wait at a station in a quiet room, where crew come to work alone.
-    if (!plan.faking || view.time >= plan.faking.until || !QUIET_ROOMS.includes(stationRoom(plan.faking.station))) {
-      const quiet = STATIONS.filter((st) => QUIET_ROOMS.includes(st.room) && !(st.visual && !isCareless(view)))
+    if (!plan.faking || view.time >= plan.faking.until || !QUIET_ROOMS.includes(stationRoom(plan.faking.station)) || doneFaking(view, plan, !!opts.tidy)) {
+      const quiet = STATIONS.filter((st) => QUIET_ROOMS.includes(st.room) && !(st.visual && !isCareless(view)) && !(opts.tidy && st.id === plan.faking?.station))
       const st = rng.pick(quiet)
       plan.faking = { station: st.id, until: view.time + dist(view.pos, st.at) / 2.6 + (st.length === 'short' ? view.rules.shortTaskTime : view.rules.longTaskTime) * rng.range(0.9, 1.1) }
     }
@@ -279,7 +302,7 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng, opts: Ro
     plan.watchedSince ??= now
     if (now - plan.watchedSince > STALK_PATIENCE) {
       go(plan, 'blend', now)
-      return fake(view, plan, rng, true)
+      return fake(view, plan, rng, true, opts.tidy)
     }
   } else plan.watchedSince = null
   // Stalk from just outside what the crew can see.
