@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { unlockAudio } from '../ui/sfx'
 import { useSim } from '../ui/store'
 
@@ -19,7 +20,11 @@ export default function TitleScreen() {
   function enter() {
     // The first click is also what lets the browser play sound later.
     unlockAudio()
-    useSim.getState().toSetup()
+    const go = () => useSim.getState().toSetup()
+    // Where the browser can do it, the card in the middle and the logo glide across and become
+    // the side panel and its heading. Elsewhere the panel simply slides in.
+    if (document.startViewTransition) document.startViewTransition(() => flushSync(go))
+    else go()
   }
 
   return (

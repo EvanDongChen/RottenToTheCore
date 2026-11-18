@@ -53,7 +53,14 @@ export default function SetupPanel() {
 
   return (
     <aside className="panel setup">
-      <h1 className="brand">Rotten to the Core</h1>
+      <div className="brand">
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />
+        <h1>
+          Rotten to
+          <br />
+          the Core
+        </h1>
+      </div>
       <p className="tagline">Set up the lab, then watch.</p>
 
       <h3>Brains</h3>
