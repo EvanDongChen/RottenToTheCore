@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AREAS, BOUNDS, VENTS } from '../sim/map'
+import { AREAS, BOUNDS, centre, FUSE_BOX, MELTDOWN_PANELS, TABLE, VENTS } from '../sim/map'
+import type { Vec2 } from '../sim/types'
 import { currentGame, simTargets, useSim } from '../ui/store'
 import { LOOKS } from './fruitLooks'
 
@@ -26,6 +27,11 @@ export default function Minimap() {
 
   const [x0, z0, x1, z1] = BOUNDS
   const game = currentGame()
+  const lockedId = useSim((s) => s.lockedRoom)
+  const lightsOut = useSim((s) => s.lightsOut)
+  const meltdown = useSim((s) => s.meltdownAt !== null)
+  const meeting = useSim((s) => s.phase === 'meeting')
+  const locked = lockedId ? AREAS.find((a) => a.id === lockedId) : undefined
   return (
     <svg className="minimap panel" viewBox={`${x0} ${z0} ${x1 - x0} ${z1 - z0}`} role="img" aria-label="Map of the lab">
       {AREAS.map((a) => (
@@ -40,11 +46,21 @@ export default function Minimap() {
       {VENTS.map((v) => (
         <rect key={v.id} x={v.at[0] - 0.6} y={v.at[1] - 0.4} width={1.2} height={0.8} className="vent" />
       ))}
+      {/* A locked room is outlined until its doors open. */}
+      {locked && <rect x={locked.rect[0]} y={locked.rect[1]} width={locked.rect[2] - locked.rect[0]} height={locked.rect[3] - locked.rect[1]} className="locked-room" />}
       {game.bodies.map((b) => (
         <text key={`body-${b.id}`} x={b.pos[0]} y={b.pos[1] + 1} className="body-mark" textAnchor="middle">
           ✕
         </text>
       ))}
+      {/* Pings: rings that keep spreading out from wherever something needs attention. */}
+      {game.bodies.map((b) => (
+        <Ping key={`ping-body-${b.id}`} at={b.pos} kind="body" />
+      ))}
+      {lightsOut && <Ping at={FUSE_BOX} kind="sabotage" />}
+      {meltdown && MELTDOWN_PANELS.map((p, i) => <Ping key={`melt-${i}`} at={p} kind="body" />)}
+      {locked && <Ping at={centre(locked.rect)} kind="sabotage" />}
+      {meeting && <Ping at={TABLE.at} kind="meeting" />}
       {fruits.map((f) => {
         const at = simTargets.get(f.id)
         if (!at || !f.alive) return null
@@ -63,5 +79,15 @@ export default function Minimap() {
         )
       })}
     </svg>
+  )
+}
+
+/** Two rings spreading out from a spot, half a beat apart. */
+function Ping({ at, kind }: { at: Vec2; kind: 'body' | 'sabotage' | 'meeting' }) {
+  return (
+    <g className={`ping ${kind}`}>
+      <circle cx={at[0]} cy={at[1]} r={2.2} />
+      <circle cx={at[0]} cy={at[1]} r={2.2} />
+    </g>
   )
 }

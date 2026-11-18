@@ -5,7 +5,7 @@ import { Text } from '@react-three/drei'
 import { Object3D } from 'three'
 import type { InstancedMesh } from 'three'
 import fontUrl from '@fontsource/lilita-one/files/lilita-one-latin-400-normal.woff?url'
-import { AREAS, centre, doorsOf, MELTDOWN_PANELS, ROOMS, TABLE, VENTS, WALL_HEIGHT, WALLS } from '../sim/map'
+import { AREAS, centre, MELTDOWN_PANELS, ROOMS, TABLE, VENTS, WALL_HEIGHT, WALLS } from '../sim/map'
 import type { Vec2 } from '../sim/types'
 import { puff } from './Dust'
 import { useSim } from '../ui/store'
@@ -14,9 +14,13 @@ import Ballots from './Ballots'
 import BodyFlies from './BodyFlies'
 import TaskStations, { PROP_SPOTS } from './TaskStation'
 import TaskTools from './TaskTools'
+import Doorways from './Doorways'
+import { GLOW } from './Glows'
 
 const WALL_THICKNESS = 0.32
 const WALL_COLOR = '#ffffff'
+const CAP = 0.08
+const CAP_COLOR = '#c3cddb'
 const FLOOR_COLOR = '#f7f8fa'
 const HALL_COLOR = '#eef1f5'
 const LABEL_COLOR = '#8f9aab'
@@ -28,10 +32,12 @@ const LABEL_COLOR = '#8f9aab'
  */
 export default function LabMap() {
   const walls = useRef<InstancedMesh>(null)
+  const caps = useRef<InstancedMesh>(null)
 
   useLayoutEffect(() => {
     const mesh = walls.current
-    if (!mesh) return
+    const cap = caps.current
+    if (!mesh || !cap) return
     const dummy = new Object3D()
     WALLS.forEach(([x0, z0, x1, z1], i) => {
       const length = Math.hypot(x1 - x0, z1 - z0)
@@ -41,8 +47,14 @@ export default function LabMap() {
       dummy.scale.set(length + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
+      // A coloured trim along the top, a touch wider than the wall, so the outline reads from above.
+      dummy.position.y = WALL_HEIGHT + CAP / 2
+      dummy.scale.set(length + WALL_THICKNESS + 0.06, CAP, WALL_THICKNESS + 0.1)
+      dummy.updateMatrix()
+      cap.setMatrixAt(i, dummy.matrix)
     })
     mesh.instanceMatrix.needsUpdate = true
+    cap.instanceMatrix.needsUpdate = true
   }, [])
 
   const labels = useMemo(placeLabels, [])
@@ -61,6 +73,10 @@ export default function LabMap() {
       <instancedMesh ref={walls} args={[undefined, undefined, WALLS.length]} castShadow receiveShadow frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={WALL_COLOR} roughness={0.85} />
+      </instancedMesh>
+      <instancedMesh ref={caps} args={[undefined, undefined, WALLS.length]} castShadow frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={CAP_COLOR} roughness={0.6} />
       </instancedMesh>
 
       {tiles.map((t) => (
@@ -99,25 +115,9 @@ export default function LabMap() {
       <BodyFlies />
       <TaskStations />
       <TaskTools />
-      <LockedDoors />
+      <Doorways />
       <MeltdownPanels />
     </group>
-  )
-}
-
-/** Red bars across the doorways of a room the Rotten have locked. */
-function LockedDoors() {
-  const room = useSim((s) => s.lockedRoom)
-  if (!room) return null
-  return (
-    <>
-      {doorsOf(room).map((d) => (
-        <mesh key={d.id} position={[d.at[0], WALL_HEIGHT / 2, d.at[1]]} rotation={[0, d.along[0] ? 0 : Math.PI / 2, 0]} castShadow>
-          <boxGeometry args={[d.half * 2, WALL_HEIGHT * 0.9, 0.25]} />
-          <meshStandardMaterial color="#e2412f" />
-        </mesh>
-      ))}
-    </>
   )
 }
 
@@ -129,7 +129,7 @@ function MeltdownPanels() {
   return (
     <>
       {MELTDOWN_PANELS.map((p, i) => (
-        <mesh key={i} position={[p[0], 0.03, p[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh key={i} position={[p[0], 0.03, p[1]]} rotation={[-Math.PI / 2, 0, 0]} userData={GLOW}>
           <circleGeometry args={[0.8, 24]} />
           <meshBasicMaterial color={hot ? '#ff3b2f' : '#f6b62e'} transparent opacity={hot ? 0.85 : 0.5} />
         </mesh>

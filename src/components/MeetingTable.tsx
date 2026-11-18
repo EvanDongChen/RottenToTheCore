@@ -4,6 +4,7 @@ import type { Group, Mesh, MeshBasicMaterial } from 'three'
 import { seatPos } from '../sim/engine'
 import { BUTTON, SEAT_RING, TABLE } from '../sim/map'
 import { currentGame, fruitPositions, useSim } from '../ui/store'
+import { GLOW } from './Glows'
 
 const TABLE_HEIGHT = 0.75
 /** Stools stand just behind each seat. */
@@ -57,7 +58,7 @@ export default function MeetingTable() {
             <meshStandardMaterial color="#2b2f36" />
           </mesh>
           <group ref={button} position={[0, 0.12, 0]}>
-            <mesh castShadow position={[0, 0.06, 0]}>
+            <mesh castShadow position={[0, 0.06, 0]} userData={GLOW}>
               <sphereGeometry args={[0.32, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
               <meshStandardMaterial color="#e2412f" emissive="#e2412f" emissiveIntensity={0.25} />
             </mesh>

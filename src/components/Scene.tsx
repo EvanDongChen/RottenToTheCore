@@ -7,6 +7,8 @@ import { useSim } from '../ui/store'
 import Director from './Director'
 import Dust from './Dust'
 import FollowRing from './FollowRing'
+import Glows from './Glows'
+import LightsOutMask from './LightsOutMask'
 import Spray from './Spray'
 import Fruit from './Fruit'
 import Ghost from './Ghost'
@@ -60,6 +62,7 @@ export default function Scene() {
             .map((id) => <Ghost key={`${seed}:ghost:${id}`} id={id} />)}
         <Dust />
         <FollowRing />
+        <Glows />
         <Spray />
         <VisionCones />
         <SuspicionArrows />
@@ -67,6 +70,7 @@ export default function Scene() {
       {/* Before the game starts, the view turns slowly round the lab. */}
       <OrbitControls makeDefault target={[0, 0, 0]} maxPolarAngle={Math.PI / 2.15} minDistance={6} maxDistance={90} autoRotate={screen !== 'game'} autoRotateSpeed={0.35} />
       <Director />
+      <LightsOutMask />
     </Canvas>
   )
 }

@@ -6,6 +6,7 @@ import { FUSE_BOX, MELTDOWN_PANELS, MONITORS, station, STATIONS } from '../sim/m
 import type { Vec2 } from '../sim/types'
 import { currentGame, useSim } from '../ui/store'
 import Blender from './Blender'
+import { GLOW } from './Glows'
 
 /**
  * Every room's props, built from simple shapes and set against the walls, clear of the doors and
@@ -128,7 +129,7 @@ export default function TaskStations() {
 }
 
 const Box = ({ size, at, color, emissive }: { size: [number, number, number]; at: [number, number, number]; color: string; emissive?: string }) => (
-  <mesh castShadow receiveShadow position={at}>
+  <mesh castShadow receiveShadow position={at} userData={emissive ? GLOW : undefined}>
     <boxGeometry args={size} />
     <meshStandardMaterial color={color} roughness={0.7} emissive={emissive ?? '#000000'} emissiveIntensity={emissive ? 0.6 : 0} />
   </mesh>
@@ -411,7 +412,7 @@ function Screens({ count, width, y }: { count: number; width: number; y: number 
         return (
           <group key={i} position={[x, y, 0]}>
             <Box size={[width, 0.62, 0.08]} at={[0, 0, 0]} color="#2b2f36" />
-            <mesh ref={(m) => void (screens.current[i] = m)} position={[0, 0, -0.045]}>
+            <mesh ref={(m) => void (screens.current[i] = m)} position={[0, 0, -0.045]} userData={GLOW}>
               <boxGeometry args={[width - 0.1, 0.5, 0.01]} />
               <meshStandardMaterial color="#111" emissive="#2f5d7c" emissiveIntensity={0.7} />
             </mesh>
@@ -439,7 +440,7 @@ function FuseBoxes() {
     <>
       <Box size={[1.8, 1.7, 0.4]} at={[0, 0.85, 0]} color="#d7dce3" />
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <mesh key={i} ref={(m) => void (lights.current[i] = m)} position={[-0.6 + (i % 3) * 0.6, 1.15 - Math.floor(i / 3) * 0.45, 0.22]}>
+        <mesh key={i} ref={(m) => void (lights.current[i] = m)} position={[-0.6 + (i % 3) * 0.6, 1.15 - Math.floor(i / 3) * 0.45, 0.22]} userData={GLOW}>
           <boxGeometry args={[0.18, 0.18, 0.04]} />
           <meshBasicMaterial color="#4cff6a" />
         </mesh>
@@ -476,7 +477,7 @@ function ServerRack() {
     <>
       <Box size={[1, 2.1, 0.8]} at={[0, 1.05, 0]} color="#2b2f36" />
       {Array.from({ length: 8 }, (_, i) => (
-        <mesh key={i} ref={(m) => void (lights.current[i] = m)} position={[-0.25 + (i % 2) * 0.5, 0.4 + Math.floor(i / 2) * 0.42, -0.41]}>
+        <mesh key={i} ref={(m) => void (lights.current[i] = m)} position={[-0.25 + (i % 2) * 0.5, 0.4 + Math.floor(i / 2) * 0.42, -0.41]} userData={GLOW}>
           <boxGeometry args={[0.1, 0.06, 0.02]} />
           <meshBasicMaterial color="#4cff6a" />
         </mesh>
