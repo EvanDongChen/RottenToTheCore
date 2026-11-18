@@ -1,8 +1,7 @@
 import { decide, resolveActions, walk } from './actions'
 import { makeBrain } from './brains'
 import type { LlmOptions } from './brains/llm'
-import type { Brain, BrainKind, ChatContext, Claim, RoamAction } from './brains/types'
-import type { FruitView } from './view'
+import type { Brain, BrainKind, Claim, RoamAction } from './brains/types'
 import { BUTTON_COOLDOWN, MAX_GAME_TIME, TICK, TICKS_PER_SECOND } from './constants'
 import { encounters } from './encounters'
 import { round } from './log'
@@ -164,8 +163,10 @@ export interface Game {
   nextId: number
   /** Called for every event as it is logged (the screen listens here). */
   onEvent?: (e: SimEvent) => void
-  /** Called when a fruit says a roaming line, so an LLM brain can reword it for the screen. */
-  onChat?: (who: string, ctx: ChatContext, view: FruitView) => void
+  /** Called when an LLM brain has reworded a roaming line in time, for the screen only. */
+  onRetext?: (who: string, say: string) => void
+  /** Called when a fruit starts and stops waiting on its brain in a meeting (LLM calls are slow). */
+  onThinking?: (who: string, thinking: boolean) => void
 }
 
 export interface GameSetup {

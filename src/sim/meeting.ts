@@ -136,11 +136,13 @@ async function turn(game: Game, talk: Talk, f: SimFruit, step: MeetingView['step
   const askedBy = talk.asked?.who === f.id ? talk.asked.by : undefined
   if (askedBy) talk.asked = null
   let raw: MeetingLine | undefined
+  game.onThinking?.(f.id, true)
   try {
     raw = await brain.speak(viewFor(game, f), meetingView(game, step, talk.lines, askedBy, talk.checks.get(f.id)))
   } catch {
     raw = undefined
   }
+  game.onThinking?.(f.id, false)
   const { repaired, ...line } = repairLine(game, f, raw)
   if (repaired) game.stats.repairedLines = (game.stats.repairedLines ?? 0) + 1
   talk.lines.push({ who: f.id, line })
@@ -293,11 +295,13 @@ export async function runVote(game: Game, pace: Pace, lines: MeetingView['lines'
   for (const f of voters) {
     const brain = game.brains.get(f.id)!
     let ballot: Ballot
+    game.onThinking?.(f.id, true)
     try {
       ballot = repairBallot(game, f, await brain.vote(viewFor(game, f), meetingView(game, 'vote', lines)))
     } catch {
       ballot = { target: 'skip', reason: '' }
     }
+    game.onThinking?.(f.id, false)
     tally.set(ballot.target, (tally.get(ballot.target) ?? 0) + 1)
     game.public.push({ t, kind: 'vote', voter: f.id, target: ballot.target })
     logEvent(game, { t, kind: 'vote', voter: f.id, target: ballot.target, reason: ballot.reason })

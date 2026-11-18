@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type { Vector3 } from 'three'
+import { memoryCache, newUsage } from '../sim/brains/llm'
+import type { LlmOptions } from '../sim/brains/llm'
 import type { BrainKind } from '../sim/brains/types'
 import { createGame, taskBar } from '../sim/engine'
 import type { Game } from '../sim/engine'
@@ -223,12 +225,27 @@ function freshState(g: Game) {
   }
 }
 
-/** Builds a game from the current settings and roster. Set by the clock so brains can be wired up. */
-let gameFactory = (seed: number, s: Settings, roster?: FruitDef[]) => createGame({ seed, roster, rules: { ...s.rules, fruits: roster?.length ?? s.rules.fruits }, brains: { crew: s.crewBrain, rotten: s.rottenBrain } })
+/** LLM replies are kept for the whole session, so watching the same seed again is free. */
+const llmCache = memoryCache()
 
-export function setGameFactory(f: typeof gameFactory) {
-  gameFactory = f
+/** LLM settings for a new game, if either side uses the LLM brain and there is a key. */
+function llmOptions(s: Settings): LlmOptions | undefined {
+  if ((s.crewBrain !== 'llm' && s.rottenBrain !== 'llm') || !s.apiKey) return undefined
+  return {
+    apiKey: s.apiKey,
+    model: s.model,
+    chats: true,
+    cache: llmCache,
+    usage: newUsage(),
+    requestsPerMinute: 30,
+    maxCalls: 300,
+    onProblem: (problem) => useSim.setState({ problem }),
+  }
 }
+
+/** Builds a game from the current settings and roster. */
+const gameFactory = (seed: number, s: Settings, roster?: FruitDef[]) =>
+  createGame({ seed, roster, rules: { ...s.rules, fruits: roster?.length ?? s.rules.fruits }, brains: { crew: s.crewBrain, rotten: s.rottenBrain }, llm: llmOptions(s) })
 
 /** Listeners told whenever a new game object replaces the old one. */
 const swapListeners = new Set<(g: Game) => void>()

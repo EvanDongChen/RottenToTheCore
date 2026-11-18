@@ -16,7 +16,7 @@ import { hashLog } from '../sim/log'
 import { resultOf, summarize } from '../sim/metrics'
 import type { GameResult, Summary } from '../sim/metrics'
 import type { Rules } from '../sim/types'
-import { llmFromEnv, llmUsage } from './llmSetup'
+import { llmFromEnv, llmUsage, saveLlmCache } from './llmSetup'
 
 function flag(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`)
@@ -51,12 +51,14 @@ const matchups: [BrainKind, BrainKind][] = has('matrix')
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 
 async function runMatchup(crew: BrainKind, rotten: BrainKind): Promise<Summary> {
-  const llm = crew === 'llm' || rotten === 'llm' ? llmFromEnv() : undefined
+  const wantsLlm = crew === 'llm' || rotten === 'llm'
+  if (wantsLlm && !process.env.GEMINI_API_KEY) console.warn('  No GEMINI_API_KEY set: the LLM brain plays as the Bayesian brain.')
   const results: GameResult[] = []
   const started = performance.now()
   let combined = ''
   for (let i = 0; i < games; i++) {
     const seed = firstSeed + i
+    const llm = wantsLlm ? llmFromEnv() : undefined
     const game = createGame({ seed, rules, brains: { crew, rotten }, llm })
     try {
       await playGame(game)
@@ -66,6 +68,7 @@ async function runMatchup(crew: BrainKind, rotten: BrainKind): Promise<Summary> 
       throw err
     }
     results.push(resultOf(game, crew, rotten, llm ? llmUsage(game) : undefined))
+    if (llm) saveLlmCache()
     combined += hashLog(game.log)
     if (logPath && i === 0) writeFileSync(logPath, game.log.map((e) => JSON.stringify(e)).join('\n') + '\n')
     if (!has('quiet') && games >= 50 && (i + 1) % Math.ceil(games / 10) === 0) process.stdout.write(`  ${crew} vs ${rotten}: ${i + 1}/${games}\r`)

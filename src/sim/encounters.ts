@@ -268,7 +268,18 @@ function deliver(game: Game, item: QueuedLine) {
   game.stats.chats++
   if (item.source) game.stats.rumours++
   logEvent(game, { t: round(game.time), kind: 'chat', who: s.id, to: l.id, say: line.say, topic: item.ctx.topic, accuses: line.accuses, vouches: line.vouches, claim: line.claim, source: item.source })
-  game.onChat?.(s.id, item.ctx, view)
+  // An LLM brain may reword the line for the screen. The sim already used the stock line, so
+  // games stay the same either way; a reply later than 3 sim seconds is dropped.
+  const brain = game.brains.get(s.id)!
+  if (brain.kind === 'llm' && game.onRetext) {
+    const said = game.time
+    brain
+      .chat(view, item.ctx)
+      .then((lines) => {
+        if (game.time - said <= 3 && lines[0]?.say && lines[0].say !== line.say) game.onRetext?.(s.id, lines[0].say)
+      })
+      .catch(() => {})
+  }
 
   const claim = item.ctx.claim
   if (claim) {

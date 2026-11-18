@@ -84,6 +84,13 @@ export function attach(game: Game) {
   game.onEvent = (e) => {
     if (game === currentGame()) handle(game, e)
   }
+  // An LLM fruit's own words for a roaming line: swap them into the bubble.
+  game.onRetext = (who, text) => {
+    if (game === currentGame()) say(game, who, text)
+  }
+  game.onThinking = (who, on) => {
+    if (game === currentGame()) useSim.setState((s) => ({ thinking: { ...s.thinking, [who]: on || undefined } }))
+  }
 }
 
 function handle(game: Game, e: SimEvent) {
