@@ -5,6 +5,7 @@ import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapi
 import type { RapierRigidBody } from '@react-three/rapier'
 import { Group, Quaternion, Vector3 } from 'three'
 import type { Mesh } from 'three'
+import { overridden as overriddenOnScreen } from '../ui/clock'
 import { PARTY_BEAT_MS } from '../ui/sfx'
 import { currentGame, fruitPositions, fruitSpeeds, ghostPositions, simTargets, useSim } from '../ui/store'
 import type { SimState } from '../ui/store'
@@ -13,6 +14,7 @@ import type { Vec2 } from '../sim/types'
 import { puff } from './Dust'
 import Emote from './Emote'
 import FruitFace from './FruitFace'
+import { idleTick, makeIdle } from './idleLife'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
 import RichText from './RichText'
@@ -146,6 +148,9 @@ export default function Fruit({ id }: { id: string }) {
   const waddlePhase = useRef(Math.random() * Math.PI * 2)
   /** Last beat of the party music this fruit hopped on. */
   const lastBeat = useRef(-1)
+  /** Fidgets while standing about: glances and the odd stretch. Its glance is read by the physics step. */
+  const idle = useRef(makeIdle())
+  const idleLook = useRef<[number, number] | null>(null)
   const lastHop = useRef(-1)
   /** Puts each fruit's cheering hops slightly out of step with its neighbours'. */
   const hopOffset = useRef(Math.random())
@@ -356,6 +361,8 @@ export default function Fruit({ id }: { id: string }) {
       const workAt = workFacing(id)
       if (workAt && !sim.lookAt[id]) v.tmp.set(workAt[0] - t.x, 0, workAt[1] - t.z)
       else if (focus) v.tmp.set(focus.x - t.x, 0, focus.z - t.z)
+      // Nothing to look at: glance about now and then.
+      else if (idleLook.current) v.tmp.set(idleLook.current[0], 0, idleLook.current[1])
       else v.tmp.set(0, 0, 0)
     }
     // Dance party: hop on every beat, rock from side to side, and spin on the spot.
@@ -404,11 +411,16 @@ export default function Fruit({ id }: { id: string }) {
     // Busy at a station, the fuse box or a meltdown panel: arms pump, body bobs.
     const busy = alive && !!sim && !sim.path.length && (sim.working !== null || sim.action.kind === 'fixSabotage')
     const { squeeze, lift, spin, tilt, tucked } = squeezeFor(st, id, now)
+    // Standing about with nothing on: fidget. Only stretch while roaming, and when not upset.
+    const standing = alive && !!sim && !busy && !sim.path.length && !dancing && !st.speech[id] && (fruitSpeeds.get(id) ?? 0) < 0.4
+    const fidget = idleTick(idle.current, id, now, standing && !overriddenOnScreen(id), !mood && currentGame().phase === 'roam')
+    idleLook.current = fidget.look
+    const reach = fidget.stretch
 
     // Squash and stretch from vertical speed.
     if (visual.current) {
       const stretch = Math.max(-0.2, Math.min(0.2, lv.y * 0.05))
-      visual.current.scale.set((1 - stretch * 0.5) * squeeze, (1 + stretch) * squeeze, (1 - stretch * 0.5) * squeeze)
+      visual.current.scale.set((1 - stretch * 0.5 - reach * 0.06) * squeeze, (1 + stretch + reach * 0.13) * squeeze, (1 - stretch * 0.5 - reach * 0.06) * squeeze)
       // Shaking fruits also judder from side to side.
       visual.current.position.x = mood === 'shake' ? Math.sin(now * 0.09) * 0.035 : 0
       // Working fruits bob in time with their arms; climbing into a vent sinks, jumping into the Juicer rises.
@@ -500,6 +512,12 @@ export default function Fruit({ id }: { id: string }) {
         v.tmp.set(side, 0, 0).applyQuaternion(v.quat)
         arm[0].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.22).addScaledVector(UP, 0.16), 0.5)
         arm[1].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.26 + pump * 0.1).addScaledVector(UP, 0.5 + pump * 0.12), 0.5)
+      }
+      // A big stretch: both arms straight up over the head.
+      if (reach > 0 && !armed) {
+        v.tmp.set(side, 0, 0).applyQuaternion(v.quat)
+        arm[0].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.08).addScaledVector(UP, ARM_SEGMENT), 0.5 * reach)
+        arm[1].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.12).addScaledVector(UP, ARM_SEGMENT * 2), 0.5 * reach)
       }
       // Voting: the right arm points straight at the chosen fruit.
       const pointed = alive && i === 1 && pointAt ? fruitPositions.get(pointAt) : undefined

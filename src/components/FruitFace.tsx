@@ -5,6 +5,7 @@ import type { Mesh, MeshStandardMaterial } from 'three'
 import type { FruitKind } from '../sim/types'
 import { fruitPositions, useSim } from '../ui/store'
 import type { UiFruit } from '../ui/store'
+import { stretching } from './idleLife'
 import { anchors, radiusAt, EYE_SPREAD, LIMB_COLOR } from './fruitShapes'
 
 // Tiny dot eyes and a flat 2D mouth that snaps between drawn shapes while talking, like
@@ -168,7 +169,8 @@ export default function FruitFace({ fruit }: { fruit: UiFruit }) {
     eyeMeshes.current.forEach((mesh) => {
       if (!mesh) return
       if (mood === 'sulk') mesh.scale.set(1.1, 0.4, 1)
-      else if (calm && now < tic.blinkEnd) mesh.scale.set(1.1, 0.12, 1)
+      // Shut tight for a blink, or squeezed shut at the top of a big stretch.
+      else if ((calm && now < tic.blinkEnd) || (stretching.get(id) ?? 0) > 0.5) mesh.scale.set(1.1, 0.12, 1)
       else mesh.scale.setScalar(mood === 'gasp' ? 1.8 : mood === 'shake' ? 1.35 : 1)
       mesh.position.x = glance * 0.026
     })
