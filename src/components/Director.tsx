@@ -4,6 +4,9 @@ import { MathUtils, Vector3 } from 'three'
 import { AREAS, centre, ROOMS, TABLE } from '../sim/map'
 import { currentGame, fruitPositions, useSim } from '../ui/store'
 
+/** The Juicer's press, where ejected fruits go in. */
+const JUICER_PRESS: [number, number] = [0, -17.6]
+
 /** Distances from the camera to what it looks at, for each kind of shot. */
 const WIDE = 62
 const ROOM = 30
@@ -43,6 +46,10 @@ export default function Director() {
     if (shot && shotAge < HOLD_MS[shot.kind]) {
       want.set(shot.at[0], 1, shot.at[1])
       distance = shot.kind === 'kill' ? (shotAge < KILL_CLOSE_MS ? CLOSE * 0.8 : CLOSE * 1.6) : CLOSE
+    } else if (sim.juicing) {
+      // Into the Juicer: frame the press as it comes down.
+      want.set(JUICER_PRESS[0], 1, JUICER_PRESS[1] + 2)
+      distance = CLOSE * 1.2
     } else if (sim.party) {
       want.set(0, 1, 0)
       distance = 34
@@ -53,6 +60,11 @@ export default function Director() {
       want.set(TABLE.at[0], 1, TABLE.at[1])
       if (at) want.lerp(at, sim.ejecting ? 0.8 : 0.35)
       distance = sim.ejecting ? CLOSE * 1.5 : TABLE_SHOT
+      // Nearly there: settle on the press ahead of the jump.
+      if (sim.ejecting && at && Math.hypot(at.x - JUICER_PRESS[0], at.z - JUICER_PRESS[1]) < 9) {
+        want.set(JUICER_PRESS[0], 1, JUICER_PRESS[1] + 2)
+        distance = CLOSE * 1.2
+      }
     } else {
       // A chat close to the current shot draws the camera in.
       const speaking = Object.keys(sim.speech).filter((id) => sim.speech[id])

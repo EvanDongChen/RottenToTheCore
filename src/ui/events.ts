@@ -4,10 +4,13 @@ import type { SimEvent } from '../sim/log'
 import { placeName, vent } from '../sim/map'
 import { findPath } from '../sim/nav'
 import type { Role, Vec2 } from '../sim/types'
-import { carry } from './clock'
+import { carry, hold } from './clock'
+import { LOOKS } from '../components/fruitLooks'
+import { puff } from '../components/Dust'
+import { spray } from '../components/Spray'
 import { checkReplay } from './replay'
 import { alarm, babble, cheer, clang, gasp, horn, powerDown, slice, startParty, sulk, taskBeep, thud, voteTick } from './sfx'
-import { currentGame, uiFruits, useSim } from './store'
+import { currentGame, fruitPositions, uiFruits, useSim } from './store'
 import type { FeedEntry, Shot, SimState } from './store'
 
 /**
@@ -120,6 +123,10 @@ function handle(game: Game, e: SimEvent) {
       sfx(slice)
       burst('CHOP!', e.at[0], e.at[1])
       shot('kill', e.at)
+      if (!quiet) {
+        spray(e.at[0], e.at[1], LOOKS[victim.def.kind].flesh, 1.3)
+        useSim.setState({ slowUntil: performance.now() + (e.witnesses.length ? SLOW_WITNESSED_MS : SLOW_KILL_MS) })
+      }
       later(game, 900, () => useSim.setState({ attack: null }))
       feed({ t: e.t, tab: 'system', text: `${n(e.killer)} sliced ${n(e.victim)} in ${placeName(e.room)}${e.witnesses.length ? `, seen by ${e.witnesses.map(n).join(' and ')}` : ', unseen'}.` })
       syncFruits(game)
@@ -140,7 +147,8 @@ function handle(game: Game, e: SimEvent) {
         feed({ t: e.t, tab: 'meeting', text: `${n(e.caller)} called an emergency meeting.` })
       }
       const dead = Object.fromEntries(game.fruits.filter((f) => !f.alive).map((f) => [f.id, true]))
-      useSim.setState({ votes: {}, speech: {}, lookAt: {}, cleared: dead, splats: [], speaker: null, lightsOut: false, attack: null })
+      useSim.setState({ votes: {}, speech: {}, lookAt: {}, cleared: dead, splats: [], speaker: null, lightsOut: false, attack: null, ...(e.reason === 'emergency' && !quiet ? { buttonAt: performance.now() } : {}) })
+      if (!quiet) walkIn(game)
       syncFruits(game)
       break
     }
@@ -162,11 +170,18 @@ function handle(game: Game, e: SimEvent) {
       }
       break
     case 'vent': {
-      const now = performance.now()
-      useSim.setState((s) => ({ vents: { ...s.vents, [e.from]: now, [e.to]: now } }))
-      sfx(clang)
       const v = vent(e.to)
-      burst('CLANK!', v.at[0], v.at[1])
+      if (!quiet) {
+        // Hold the fruit at the entry while it hops in, then let it pop out of the other hatch.
+        const now = performance.now()
+        const inMs = VENT_IN_MS / Math.sqrt(useSim.getState().speed)
+        const entry = vent(e.from).at
+        hold(e.who, entry, inMs)
+        useSim.setState((st) => ({ vents: { ...st.vents, [e.from]: now, [e.to]: now + inMs }, venting: { ...st.venting, [e.who]: { at: now, inMs } } }))
+        later(game, inMs, () => burst('CLANK!', v.at[0], v.at[1]))
+        later(game, inMs * 3, () => useSim.setState((st) => ({ venting: { ...st.venting, [e.who]: undefined } })))
+      }
+      sfx(clang)
       shot('vent', v.at)
       feed({ t: e.t, tab: 'sighting', text: `${n(e.who)} vented from ${placeName(vent(e.from).room)} to ${placeName(v.room)}${e.seenBy.length ? `, seen by ${e.seenBy.map(n).join(' and ')}` : ''}.` })
       break
@@ -297,6 +312,17 @@ export function rebuild(game: Game) {
 
 /** Where an ejected fruit is taken: the Juicer's mouth, or the compost bin in the Greenhouse. */
 const JUICER_MOUTH: Vec2 = [0, -15.2]
+/** The press's hopper, which the ejected fruit jumps into. */
+const HOPPER: Vec2 = [0, -17.6]
+/** Real milliseconds from the jump into the hopper to the press coming down. */
+const JUMP_IN_MS = 900
+/** How fast fruits waddle in to a meeting, in world units per sim second. */
+const WALK_IN_SPEED = 9
+/** Real milliseconds a fruit takes to climb into a vent before it pops out of the other end. */
+const VENT_IN_MS = 700
+/** Slow motion after a kill, in real milliseconds: longer when someone saw it. */
+const SLOW_KILL_MS = 600
+const SLOW_WITNESSED_MS = 1500
 const COMPOST: Vec2 = [-23, -17.5]
 
 /** Two fruits carry the ejected one off; SPLORT, the glass fills, and the room reacts. */
@@ -319,16 +345,45 @@ function ejectOnScreen(game: Game, who: string, role: Role, votes: number) {
   useSim.setState({ ejecting: who, speaker: null, lookAt: Object.fromEntries(carriers.map((c) => [c.id, who])) })
   carry(paths, from, () => {
     if (game !== currentGame()) return
-    burst(compost ? 'PLOP!' : 'SPLORT!', dest[0], dest[1])
-    sfx(slice)
-    const confirm = game.rules.confirmEjects
-    card(`${nameOf(game, who).toUpperCase()} ${confirm ? (role === 'rotten' ? 'WAS ROTTEN' : 'WAS NOT ROTTEN') : 'WAS EJECTED'}`, `${votes} votes. Into the ${compost ? 'compost' : 'Juicer'}.`, true)
-    if (confirm && role === 'rotten') sfx(cheer)
-    else sfx(gasp)
-    useSim.setState((st) => ({ ejecting: null, juice: st.juice + 1, cleared: { ...st.cleared, [who]: true }, lookAt: {} }))
-    for (const f of game.fruits) if (f.alive) react(game, f.id, confirm ? (role === 'rotten' ? 'cheer' : 'gasp') : 'puzzle', 2000)
-    syncFruits(game)
+    // In it goes: a jump up into the hopper (the compost bin), then the press comes down.
+    const color = LOOKS[out.def.kind].flesh
+    useSim.setState({ juicing: { id: who, at: performance.now() } })
+    hold(who, compost ? COMPOST : HOPPER, JUMP_IN_MS / Math.sqrt(useSim.getState().speed))
+    laterSim(game, JUMP_IN_MS / 1000, () => {
+      if (!compost) useSim.setState({ slamAt: performance.now() })
+      spray(dest[0], compost ? dest[1] : HOPPER[1], compost ? '#6b4a2b' : color, 1.6, compost ? 0.6 : 1.6)
+      burst(compost ? 'PLOP!' : 'SPLORT!', dest[0], dest[1])
+      sfx(slice)
+      sfx(thud)
+      const confirm = game.rules.confirmEjects
+      card(`${nameOf(game, who).toUpperCase()} ${confirm ? (role === 'rotten' ? 'WAS ROTTEN' : 'WAS NOT ROTTEN') : 'WAS EJECTED'}`, `${votes} votes. Into the ${compost ? 'compost' : 'Juicer'}.`, true)
+      if (confirm && role === 'rotten') sfx(cheer)
+      else sfx(gasp)
+      useSim.setState((st) => ({ ejecting: null, juicing: null, juice: st.juice + (compost ? 0 : 1), cleared: { ...st.cleared, [who]: true }, lookAt: {} }))
+      for (const f of game.fruits) if (f.alive) react(game, f.id, confirm ? (role === 'rotten' ? 'cheer' : 'gasp') : 'puzzle', 2000)
+      syncFruits(game)
+    })
   })
+}
+
+/**
+ * When a meeting is called the sim seats everyone at once. On screen they waddle in fast from
+ * wherever they were instead, kicking up dust as they set off.
+ */
+function walkIn(game: Game) {
+  const paths: Record<string, Vec2[]> = {}
+  const from: Record<string, Vec2> = {}
+  for (const f of game.fruits) {
+    if (!f.alive) continue
+    const at = fruitPositions.get(f.id)
+    if (!at) continue
+    const start: Vec2 = [at.x, at.z]
+    if (Math.hypot(start[0] - f.pos[0], start[1] - f.pos[1]) < 0.5) continue
+    paths[f.id] = findPath(start, f.pos, f.lane)
+    from[f.id] = start
+    puff(start[0], start[1], 0.8)
+  }
+  if (Object.keys(paths).length) carry(paths, from, undefined, WALK_IN_SPEED)
 }
 
 const HOW: Record<string, string> = {

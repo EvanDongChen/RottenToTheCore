@@ -3,6 +3,9 @@ import { AREAS, BOUNDS, VENTS } from '../sim/map'
 import { currentGame, simTargets, useSim } from '../ui/store'
 import { LOOKS } from './fruitLooks'
 
+/** Shorter names for rooms whose full name doesn't fit on the map. */
+const SHORT: Record<string, string> = { ripening: 'Ripening', cold: 'Cold Storage', electrical: 'Electrical', greenhouse: 'Greenhouse', cafeteria: 'Cafeteria' }
+
 /** How often the dots move, in real milliseconds. Smooth enough for a map this small. */
 const REFRESH_MS = 120
 
@@ -27,6 +30,12 @@ export default function Minimap() {
     <svg className="minimap panel" viewBox={`${x0} ${z0} ${x1 - x0} ${z1 - z0}`} role="img" aria-label="Map of the lab">
       {AREAS.map((a) => (
         <rect key={a.id} x={a.rect[0]} y={a.rect[1]} width={a.rect[2] - a.rect[0]} height={a.rect[3] - a.rect[1]} className={a.hallway ? 'hall' : 'room'} />
+      ))}
+      {/* Room names, small enough to sit inside each room. */}
+      {AREAS.filter((a) => !a.hallway).map((a) => (
+        <text key={`label-${a.id}`} x={(a.rect[0] + a.rect[2]) / 2} y={a.rect[1] + 2.4} className="room-label" textAnchor="middle">
+          {SHORT[a.id] ?? a.name}
+        </text>
       ))}
       {VENTS.map((v) => (
         <rect key={v.id} x={v.at[0] - 0.6} y={v.at[1] - 0.4} width={1.2} height={0.8} className="vent" />

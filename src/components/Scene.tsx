@@ -6,6 +6,7 @@ import { advance } from '../ui/clock'
 import { useSim } from '../ui/store'
 import Director from './Director'
 import Dust from './Dust'
+import Spray from './Spray'
 import Fruit from './Fruit'
 import Ghost from './Ghost'
 import Stage from './Stage'
@@ -57,6 +58,7 @@ export default function Scene() {
             .filter(Boolean)
             .map((id) => <Ghost key={`${seed}:ghost:${id}`} id={id} />)}
         <Dust />
+        <Spray />
         <VisionCones />
         <SuspicionArrows />
       </Suspense>

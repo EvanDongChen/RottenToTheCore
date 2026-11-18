@@ -1,24 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="One Bad Apple: a red apple with wolf ears, a scowl and two fangs">
-  <!-- wolf ears poking out from behind -->
-  <path d="M33 40 L24 10 L52 27 Z" fill="#6b5240" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M87 40 L96 10 L68 27 Z" fill="#6b5240" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M33 31 L29.500 18.500 L41 25.500 Z" fill="#f4a7a0"/>
-  <path d="M87 31 L90.500 18.500 L79 25.500 Z" fill="#f4a7a0"/>
-  <!-- apple -->
-  <path d="M60 37 C47 25 18 29 16 61 C14 93 38 113 60 105 C82 113 106 93 104 61 C102 29 73 25 60 37 Z" fill="#e2412f" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M60 105 C82 113 106 93 104 61 C103 50 99 42 93 37 C99 62 88 92 60 105 Z" fill="#b82a1f"/>
-  <path d="M60 37 C47 25 18 29 16 61 C14 93 38 113 60 105 C82 113 106 93 104 61 C102 29 73 25 60 37 Z" fill="none" stroke="#2a1a12" stroke-width="5" stroke-linejoin="round"/>
-  <ellipse cx="33" cy="50" rx="7" ry="11" transform="rotate(28 33 50)" fill="#fff" opacity="0.4"/>
-  <!-- stem and leaf -->
-  <path d="M60 38 C60 28 62 20 68 14" fill="none" stroke="#2a1a12" stroke-width="6" stroke-linecap="round"/>
-  <path d="M66 22 C74 9 90 9 97 14 C92 27 76 31 66 22 Z" fill="#4c9a3b" stroke="#2a1a12" stroke-width="4" stroke-linejoin="round"/>
-  <!-- scowl -->
-  <path d="M33 52 L52 59" stroke="#2a1a12" stroke-width="5" stroke-linecap="round"/>
-  <path d="M87 52 L68 59" stroke="#2a1a12" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="45" cy="66" r="5" fill="#2a1a12"/>
-  <circle cx="75" cy="66" r="5" fill="#2a1a12"/>
-  <!-- grin with fangs -->
-  <path d="M40 81 Q60 99 80 81 Z" fill="#2a1a12" stroke="#2a1a12" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M46 83 L54 86 L49 94 Z" fill="#fff8e6"/>
-  <path d="M74 83 L66 86 L71 94 Z" fill="#fff8e6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>Rotten to the Core</title>
+  <!-- An apple core on stick legs: bitten on both sides, with a rotten patch creeping in and a sly look. -->
+  <g stroke="#2a1a12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Legs -->
+    <path d="M54 104 L48 120 M74 104 L80 120" fill="none" />
+    <path d="M41 121 h10 M77 121 h10" fill="none" />
+    <!-- Stem and leaf -->
+    <path d="M64 22 C63 14 66 9 70 6" fill="none" />
+    <path d="M68 13 C78 4 92 8 94 14 C84 19 74 19 68 13 Z" fill="#4c9a3b" />
+    <!-- The core: red skin top and bottom, pale flesh pinched in where the bites are -->
+    <path d="M38 34 C38 22 52 18 64 24 C76 18 90 22 90 34 C90 40 86 44 80 46
+             C74 52 72 62 74 70 C76 78 82 82 86 86 C90 92 86 104 76 106 C70 107 66 104 64 104
+             C62 104 58 107 52 106 C42 104 38 92 42 86 C46 82 52 78 54 70
+             C56 62 54 52 48 46 C42 44 38 40 38 34 Z" fill="#fff3d6" />
+    <path d="M38 34 C38 22 52 18 64 24 C76 18 90 22 90 34 C90 40 86 44 80 46 C70 42 58 42 48 46 C42 44 38 40 38 34 Z" fill="#d8342c" />
+    <path d="M42 86 C46 82 50 81 64 82 C78 81 82 82 86 86 C90 92 86 104 76 106 C70 107 66 104 64 104 C62 104 58 107 52 106 C42 104 38 92 42 86 Z" fill="#d8342c" />
+  </g>
+  <!-- Bite marks -->
+  <g fill="#fff3d6">
+    <circle cx="49" cy="52" r="3" />
+    <circle cx="49" cy="62" r="3" />
+    <circle cx="79" cy="56" r="3" />
+    <circle cx="79" cy="66" r="3" />
+  </g>
+  <!-- The rot, creeping in -->
+  <path d="M60 56 C66 52 74 56 72 64 C70 72 62 74 58 68 C55 64 56 58 60 56 Z" fill="#8a6a3b" />
+  <circle cx="66" cy="63" r="3.2" fill="#5e4524" />
+  <circle cx="61" cy="59" r="1.8" fill="#5e4524" />
+  <!-- Seeds -->
+  <g fill="#2a1a12">
+    <ellipse cx="60" cy="76" rx="2" ry="3.4" transform="rotate(-20 60 76)" />
+    <ellipse cx="68" cy="76" rx="2" ry="3.4" transform="rotate(20 68 76)" />
+  </g>
+  <!-- The sly face on the skin: one eye half shut, a smirk -->
+  <g stroke="#2a1a12" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M53 33 h6" />
+    <circle cx="73" cy="33" r="2.4" fill="#2a1a12" stroke="none" />
+    <path d="M57 39 C62 42 68 41 72 37" />
+  </g>
 </svg>

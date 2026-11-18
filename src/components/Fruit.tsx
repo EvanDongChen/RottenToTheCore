@@ -7,6 +7,9 @@ import { Group, Quaternion, Vector3 } from 'three'
 import type { Mesh } from 'three'
 import { PARTY_BEAT_MS } from '../ui/sfx'
 import { currentGame, fruitPositions, fruitSpeeds, ghostPositions, simTargets, useSim } from '../ui/store'
+import type { SimState } from '../ui/store'
+import { station } from '../sim/map'
+import type { Vec2 } from '../sim/types'
 import { puff } from './Dust'
 import Emote from './Emote'
 import FruitFace from './FruitFace'
@@ -106,6 +109,12 @@ export default function Fruit({ id }: { id: string }) {
   // Set when the fruit is chopped: where the whole body was, so the slices can take its place.
   const [chop, setChop] = useState<{ position: [number, number, number]; quaternion: [number, number, number, number] } | null>(null)
   const knife = useRef<Group>(null)
+  /** The progress bar over its head while it works, and the grey "faking" tag. */
+  const workWrap = useRef<HTMLDivElement>(null)
+  const workBar = useRef<HTMLElement>(null)
+  const fakeTag = useRef<HTMLSpanElement>(null)
+  /** Legs and arms, hidden while it is down a vent or in the Juicer. */
+  const limbs = useRef<Group>(null)
   const streaks = useRef<Group>(null)
   /** Vertical speed last frame, for spotting the moment it lands. */
   const lastFall = useRef(0)
@@ -337,7 +346,10 @@ export default function Fruit({ id }: { id: string }) {
         }
       }
       const focus = lookId ? (lookId.startsWith('ghost:') ? ghostPositions.get(lookId.slice(6)) : fruitPositions.get(lookId)) : undefined
-      if (focus) v.tmp.set(focus.x - t.x, 0, focus.z - t.z)
+      // At work: face the station's prop, not whoever is about.
+      const workAt = workFacing(id)
+      if (workAt && !sim.lookAt[id]) v.tmp.set(workAt[0] - t.x, 0, workAt[1] - t.z)
+      else if (focus) v.tmp.set(focus.x - t.x, 0, focus.z - t.z)
       else v.tmp.set(0, 0, 0)
     }
     // Dance party: hop on every beat, rock from side to side, and spin on the spot.
@@ -380,15 +392,34 @@ export default function Fruit({ id }: { id: string }) {
     const beat = party ? (performance.now() - party.at) / PARTY_BEAT_MS : performance.now() / 190
     const mood = alive && !dancing ? reaction : undefined
 
+    const st = useSim.getState()
+    const now = performance.now()
+    const sim = currentGame().fruits.find((f) => f.id === id)
+    // Busy at a station, the fuse box or a meltdown panel: arms pump, body bobs.
+    const busy = alive && !!sim && !sim.path.length && (sim.working !== null || sim.action.kind === 'fixSabotage')
+    const { squeeze, lift } = squeezeFor(st, id, now)
+
     // Squash and stretch from vertical speed.
     if (visual.current) {
       const stretch = Math.max(-0.2, Math.min(0.2, lv.y * 0.05))
-      visual.current.scale.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5)
+      visual.current.scale.set((1 - stretch * 0.5) * squeeze, (1 + stretch) * squeeze, (1 - stretch * 0.5) * squeeze)
       // Shaking fruits also judder from side to side.
-      visual.current.position.x = mood === 'shake' ? Math.sin(performance.now() * 0.09) * 0.035 : 0
+      visual.current.position.x = mood === 'shake' ? Math.sin(now * 0.09) * 0.035 : 0
+      // Working fruits bob in time with their arms; climbing into a vent sinks, jumping into the Juicer rises.
+      visual.current.position.y = (busy ? Math.abs(Math.sin(now * 0.011)) * 0.06 : 0) + lift
+    }
+    const hidden = squeeze < 0.35
+    if (limbs.current) limbs.current.visible = !chop && !hidden
+    if (overlay.current) {
+      overlay.current.position.set(t.x, t.y + 1.15, t.z)
+      overlay.current.visible = !hidden
     }
 
-    if (overlay.current) overlay.current.position.set(t.x, t.y + 1.15, t.z)
+    // The work bar: real progress for crew. A Rotten never gets one, but shows "faking" when roles are revealed.
+    const task = sim && sim.role === 'crew' && sim.working ? sim.tasks.find((x) => x.station === sim.working && !x.done) : undefined
+    if (workWrap.current) workWrap.current.style.display = task ? '' : 'none'
+    if (task && workBar.current) workBar.current.style.width = `${Math.round((task.progress / task.duration) * 100)}%`
+    if (fakeTag.current) fakeTag.current.style.display = sim && sim.role === 'rotten' && sim.working && st.revealRoles ? '' : 'none'
 
     // Landing: a fall that has just stopped kicks up a puff of dust.
     if (!chop && lastFall.current < -2.5 && lv.y > lastFall.current + 1.5 && t.y < HOVER_HEIGHT + 0.35) {
@@ -437,6 +468,13 @@ export default function Fruit({ id }: { id: string }) {
         v.fwd.set(0, 0, 1).applyQuaternion(v.quat)
         arm[0].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, 0.26).addScaledVector(UP, 0.05), 0.5)
         arm[1].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, striking ? 0.6 : 0.4).addScaledVector(UP, striking ? 0.05 : 0.5), 0.5)
+      }
+      // Working: both hands forward over the station, pumping in turn.
+      if (busy && !armed) {
+        const pump = Math.sin(now * 0.011 + i * Math.PI)
+        v.tmp.set(0, 0, 1).applyQuaternion(v.quat).setY(0).normalize()
+        arm[0].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.24).addScaledVector(UP, -0.05), 0.5)
+        arm[1].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.5 + pump * 0.08).addScaledVector(UP, 0.05 + pump * 0.12), 0.5)
       }
       // Dancing, cheering or gasping: both arms in the air, pumping in turn with the beat.
       if (dancing || mood === 'cheer' || mood === 'gasp') {
@@ -576,7 +614,7 @@ export default function Fruit({ id }: { id: string }) {
         ))}
       </group>
 
-      <group visible={!chop}>
+      <group ref={limbs} visible={!chop}>
         {[0, 1].map((i) => (
           <group key={i}>
             <mesh ref={(m) => void (legMeshes.current[i] = m)} castShadow>
@@ -619,10 +657,16 @@ export default function Fruit({ id }: { id: string }) {
                   <RichText text={fruit.thought} />
                 </div>
               )}
+              <div className="work-bar" ref={workWrap} style={{ display: 'none' }}>
+                <i ref={workBar} />
+              </div>
               {votesAgainst > 0 && <div className="tally">{'✗'.repeat(votesAgainst)}</div>}
               <div className="name">
                 {fruit.name}
                 {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
+                <span className="role faking" ref={fakeTag} style={{ display: 'none' }}>
+                  faking
+                </span>
                 {showRole && fruit.perk && <span className="role perk">{fruit.perk === 'engineer' ? 'Engineer' : 'Scientist'}</span>}
                 {/* Blushing and nervous shaking already show on the face, so they get no mark here. */}
                 {reaction && reaction !== 'blush' && reaction !== 'shake' && <Emote reaction={reaction} big={dramatic} />}
@@ -633,4 +677,41 @@ export default function Fruit({ id }: { id: string }) {
       </group>
     </>
   )
+}
+
+/**
+ * How squeezed a fruit is right now (1 normal, 0 gone) and how far it is lifted, for climbing
+ * through a vent (a hop, sinking into the hatch, then popping out of the other) and for jumping
+ * into the Juicer's hopper.
+ */
+function squeezeFor(st: SimState, id: string, now: number): { squeeze: number; lift: number } {
+  const v = st.venting[id]
+  if (v) {
+    const age = now - v.at
+    if (age < v.inMs) {
+      const p = age / v.inMs
+      // A little hop, then down into the hole.
+      if (p < 0.3) return { squeeze: 1, lift: Math.sin((p / 0.3) * Math.PI) * 0.45 }
+      const sink = (p - 0.3) / 0.7
+      return { squeeze: Math.max(0, 1 - sink), lift: -sink * 0.9 }
+    }
+    const out = (age - v.inMs) / (v.inMs * 0.8)
+    // Out of the other hatch with a springy pop.
+    if (out < 1) return { squeeze: Math.min(1.15, out * 1.3 + Math.sin(out * Math.PI) * 0.15), lift: Math.sin(out * Math.PI) * 0.5 }
+  }
+  if (st.juicing?.id === id) {
+    const age = now - st.juicing.at
+    const p = Math.min(1, age / 900)
+    // Up and over into the hopper, shrinking away inside.
+    return { squeeze: p < 0.45 ? 1 : Math.max(0, 1 - (p - 0.45) / 0.4), lift: Math.sin(p * Math.PI) * 1.6 }
+  }
+  return { squeeze: 1, lift: 0 }
+}
+
+/** Where a working fruit looks: the prop behind its station. */
+function workFacing(id: string): Vec2 | null {
+  const f = currentGame().fruits.find((x) => x.id === id)
+  if (!f?.working || f.path.length) return null
+  const at = station(f.working).at
+  return [at[0], at[1] + (at[1] >= 0 ? 1.1 : -1.1)]
 }

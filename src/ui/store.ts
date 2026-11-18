@@ -221,6 +221,16 @@ export interface SimState {
   /** Ballots cast so far in a meeting: voter id to target id (or 'skip'). */
   votes: Record<string, string>
   lightsOut: boolean
+  /** Slow motion until this real time (performance.now()). */
+  slowUntil: number
+  /** Fruits climbing through a vent: when they started (real ms) and how long the climb-in lasts. */
+  venting: Record<string, { at: number; inMs: number } | undefined>
+  /** The ejected fruit going into the Juicer, and when it jumped in (real ms). */
+  juicing: { id: string; at: number } | null
+  /** When the emergency button was last pressed (real ms), for the press animation. */
+  buttonAt: number
+  /** When the Juicer's press last came down (real ms). */
+  slamAt: number
   /** Sim time a meltdown goes off, if one is going. */
   meltdownAt: number | null
   /** A room locked by sabotage. */
@@ -290,6 +300,11 @@ function freshState(g: Game) {
     focusId: null,
     votes: {},
     lightsOut: false,
+    slowUntil: 0,
+    venting: {},
+    juicing: null,
+    buttonAt: 0,
+    slamAt: 0,
     meltdownAt: null,
     lockedRoom: null,
   }
