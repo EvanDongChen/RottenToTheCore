@@ -52,7 +52,17 @@ export interface Traits {
   /** One line of history, in the fruit's own words, which it brings up in conversation. */
   backstory: string
   temper: Temper
+  /** How it plays if it is Rotten. Unset: as its sliders say. */
+  style?: RottenStyle
 }
+
+/**
+ * Rotten playstyles. Aggressive: strikes early and takes risks. Patient: waits for a perfectly
+ * clean chance. Framer: reports its own kills and points the finger first. Saboteur: turns the
+ * lights out and locks doors to split the crew before it strikes.
+ */
+export type RottenStyle = 'aggressive' | 'patient' | 'framer' | 'saboteur'
+export const ROTTEN_STYLES: RottenStyle[] = ['aggressive', 'patient', 'framer', 'saboteur']
 
 export const TRAIT_KEYS = ['aggression', 'honesty', 'talkativeness', 'suspicion', 'sharpness'] as const
 

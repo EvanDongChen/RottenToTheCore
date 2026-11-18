@@ -37,6 +37,8 @@ export function nextTask(view: FruitView): string | null {
 export interface CrewOptions {
   /** How sure it must be before it tails someone instead of working. */
   tailAbove: number
+  /** A brain that roams to learn: picks someone worth watching, if anyone is. */
+  curious?: (view: FruitView, beliefs: Record<string, number>) => string | null
 }
 
 export function crewRoam(view: FruitView, beliefs: Record<string, number>, rng: Rng, opts: CrewOptions = { tailAbove: 0.75 }): RoamAction {
@@ -73,6 +75,10 @@ export function crewRoam(view: FruitView, beliefs: Record<string, number>, rng: 
   if (view.action.kind === 'follow' && view.visible.some((o) => o.id === (view.action as { who: string }).who) && rng.chance(0.85)) return view.action
 
   const task = nextTask(view)
+  // Keeping an eye on whoever it is least sure about teaches it the most. Mostly once its own
+  // work is done: the tasks still win games.
+  const watch = opts.curious?.(view, beliefs)
+  if (watch && rng.chance(task ? 0.05 : 0.5)) return { kind: 'follow', who: watch }
   // An engineer takes a vent when it is a shortcut to the next task.
   if (task && view.perk === 'engineer') {
     const shortcut = ventShortcut(view, station(task).at)

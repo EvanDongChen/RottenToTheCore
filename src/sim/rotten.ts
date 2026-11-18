@@ -3,6 +3,7 @@ import { area, dist, DOORS, neighbours, ROOMS, STATIONS, VENTS } from './map'
 import type { Station } from './map'
 import { clearLine } from './perception'
 import type { Rng } from './rng'
+import type { RottenStyle } from './types'
 import type { FruitView, InSight } from './view'
 
 /**
@@ -36,6 +37,20 @@ export interface RottenPlan {
   watchedSince: number | null
   /** When the knife last became ready, for growing bolder the longer it waits. */
   readySince: number | null
+}
+
+/**
+ * How a particular Rotten plays, beyond its personality sliders. All optional: without them it
+ * plays as its traits say.
+ */
+export interface RottenOptions {
+  /** Extra wish to kill each fruit it can see (a thinking Rotten silences witnesses). */
+  bias?: (o: InSight) => number
+}
+
+/** A Rotten's playstyle, set on the setup screen: how it goes about the killing. */
+export function styleOf(view: FruitView): RottenStyle | undefined {
+  return view.traits.style
 }
 
 export function newPlan(): RottenPlan {
@@ -137,13 +152,14 @@ function fake(view: FruitView, plan: RottenPlan, rng: Rng, nearOthers: boolean):
   return { kind: 'fakeTask', station: plan.faking.station }
 }
 
-export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng): RoamAction {
+export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng, opts: RottenOptions = {}): RoamAction {
   const t = view.traits
+  const style = styleOf(view)
   const now = view.time
   const ready = view.killReadyIn === 0
   const crew = view.visible.filter((o) => !view.partners.includes(o.id))
   // A meltdown, now and then, when it is far from the Ripening Chamber itself. (Only with the rule.)
-  if (view.canSabotage && view.rules.meltdown && view.area !== 'ripening' && rng.chance(0.02 + t.aggression * 0.03)) {
+  if (view.canSabotage && view.rules.meltdown && view.area !== 'ripening' && rng.chance((style === 'saboteur' ? 0.06 : 0.02) + t.aggression * 0.03)) {
     return { kind: 'sabotage', what: 'meltdown' }
   }
   if (!ready) plan.readySince = null
@@ -153,8 +169,10 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng): RoamAct
   if (view.kills.length > plan.killsSeen) {
     plan.killsSeen = view.kills.length
     const watchers = crew.length
-    // Probably seen nearby: report it itself and lead the meeting with a confident story.
-    if (watchers > 0 && rng.chance(0.25 + t.aggression * 0.4)) go(plan, 'selfReport', now)
+    // Probably seen nearby: report it itself and lead the meeting with a confident story. A framer
+    // does it whenever it can, to point the finger first.
+    const selfReport = style === 'framer' ? 0.8 : 0.25 + t.aggression * 0.4
+    if ((watchers > 0 || style === 'framer') && rng.chance(selfReport)) go(plan, 'selfReport', now)
     else go(plan, 'escape', now)
   }
 
@@ -225,14 +243,18 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng): RoamAct
     }
     return { kind: 'fakeTask', station: plan.faking.station }
   }
-  const scored = candidates.map((o) => ({ o, score: targetScore(view, o), risk: strikeRisk(view, o) })).sort((a, b) => b.score - a.score)
+  const scored = candidates.map((o) => ({ o, score: targetScore(view, o) + (opts.bias?.(o) ?? 0), risk: strikeRisk(view, o) })).sort((a, b) => b.score - a.score)
   const keep = scored.find((s) => s.o.id === plan.target)
   const pick = keep ?? scored[0]
   plan.target = pick.o.id
   // An open doorway nearby is a risk most will take; a very bold Rotten will risk one witness too.
   // The longer the knife has waited, the more risk it will take: half a witness per 40 seconds.
-  const impatience = Math.min(1.5, Math.floor((now - (plan.readySince ?? now)) / IMPATIENCE) * 0.5)
-  const maxRisk = (t.aggression > 0.75 ? 1 : t.aggression > 0.25 ? 0.5 : 0) + impatience
+  // An aggressive Rotten grows impatient twice as fast and starts bolder; a patient one waits for a
+  // clean chance far longer.
+  const wait = style === 'aggressive' ? IMPATIENCE / 2 : style === 'patient' ? IMPATIENCE * 3 : IMPATIENCE
+  const impatience = Math.min(1.5, Math.floor((now - (plan.readySince ?? now)) / wait) * 0.5)
+  const bold = style === 'aggressive' ? 1 : style === 'patient' ? 0 : t.aggression > 0.75 ? 1 : t.aggression > 0.25 ? 0.5 : 0
+  const maxRisk = bold + impatience
   // Only from close in: a long chase gives others time to walk in.
   const safe = scored.find((s) => s.risk <= maxRisk && dist(view.pos, s.o.pos) < STRIKE_FROM)
   if (safe) {
@@ -241,12 +263,13 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng): RoamAct
     return { kind: 'kill', who: safe.o.id }
   }
   // Lock the target's room first, so nobody can walk in. (Only with the doors rule.)
-  if (view.canSabotage && view.rules.doors && pick.risk <= 1.5 && pick.o.area === view.area && isRoomId(view.area) && rng.chance(0.2 + t.aggression * 0.3)) {
+  const saboteur = style === 'saboteur' ? 0.4 : 0
+  if (view.canSabotage && view.rules.doors && pick.risk <= 1.5 && pick.o.area === view.area && isRoomId(view.area) && rng.chance(0.2 + t.aggression * 0.3 + saboteur)) {
     go(plan, 'sabotage', now)
     return { kind: 'sabotage', what: 'doors', room: view.area }
   }
   // Lights out first, so a strike in the dark is safer.
-  if (view.canSabotage && pick.risk <= 2.5 && rng.chance(0.25 + t.aggression * 0.3)) {
+  if (view.canSabotage && pick.risk <= (saboteur ? 4 : 2.5) && rng.chance(0.25 + t.aggression * 0.3 + saboteur)) {
     go(plan, 'sabotage', now)
     return { kind: 'sabotage', what: 'lights' }
   }
@@ -273,7 +296,7 @@ function overlaps(a0: number, a1: number, b0: number, b1: number) {
  * Returns null most of the time; a Rotten who spreads too much gossip gets noticed.
  */
 export function rottenRumour(view: FruitView, listener: string, rng: Rng): { claim: Claim; confidence: number; source?: string } | null {
-  if (!rng.chance(0.25 + view.traits.aggression * 0.35)) return null
+  if (!rng.chance((styleOf(view) === 'framer' ? 0.45 : 0.25) + view.traits.aggression * 0.35)) return null
   const pool = view.others.filter((o) => o.alive && o.id !== listener && !view.partners.includes(o.id))
   if (!pool.length) return null
   const accuser = view.memory.find((m) => m.kind === 'heard' && m.told === 'accuse' && m.who === view.id && m.source && pool.some((o) => o.id === m.source))?.source
@@ -304,16 +327,23 @@ export function rottenAlibi(view: FruitView, rng: Rng): Claim | null {
 }
 
 /** The Rotten's story for one stretch of time it spent in `areaId`. */
-export function alibiFor(view: FruitView, areaId: string, from: number, to: number, rng: Rng): Claim {
+export function alibiFor(view: FruitView, areaId: string, from: number, to: number, rng: Rng, smart = false): Claim {
+  const careless = !smart && isCareless(view)
   const said = view.ledger.find((c) => c.claim.kind === 'where' && overlaps(c.claim.from, c.claim.to, from, to))
-  if (said && !(isCareless(view) && rng.chance(0.45))) return said.claim
+  if (said && !(careless && rng.chance(0.45))) return said.claim
   const guilty = view.kills.some((k) => k.area === areaId || (k.time >= from - 5 && k.time <= to + 5))
   if (!guilty) return { kind: 'where', room: areaId, from, to }
   // Anyone it saw there probably saw it too, so a lie would be caught: own up to the room and
   // leave out who else was about. Only a careless Rotten lies anyway.
   const seenBy = view.memory.some((m) => m.kind === 'seen' && m.room === areaId && m.from <= to && m.to >= from && !view.partners.includes(m.who) && view.others.find((o) => o.id === m.who)?.alive)
-  if (seenBy && !(isCareless(view) && rng.chance(0.5))) return { kind: 'where', room: areaId, from, to }
-  const decoys = nextRooms(areaId).filter((r) => r !== areaId)
+  if (seenBy && !(careless && rng.chance(0.5))) return { kind: 'where', room: areaId, from, to }
+  let decoys = nextRooms(areaId).filter((r) => r !== areaId)
+  // Thinking it through: a room where it saw crew about then is a lie they would catch. If every
+  // room next door had someone in it, owning up to the real one is safer.
+  if (smart) {
+    decoys = decoys.filter((r) => !view.memory.some((m) => m.kind === 'seen' && m.room === r && m.from <= to && m.to >= from && !view.partners.includes(m.who)))
+    if (!decoys.length) return { kind: 'where', room: areaId, from, to }
+  }
   return { kind: 'where', room: decoys.length ? rng.pick(decoys) : rng.pick(ROOMS).id, from, to }
 }
 

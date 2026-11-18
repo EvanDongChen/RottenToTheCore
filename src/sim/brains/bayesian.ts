@@ -1,6 +1,8 @@
 import type { Rng } from '../rng'
 import type { FruitView } from '../view'
+import { rottenRoam } from '../rotten'
 import { crewRoam } from './crew'
+import { killBias, tableSuspicion } from './rottenMind'
 import { deathWindow, indexMemory, knownBodies, provenRotten, reachable, rottenLeft, storyBreaks, trustScores } from './reasoning'
 import { HeuristicBrain, tallySoFar } from './heuristic'
 import { crewSpeak, crewVote, rottenSpeak, rottenVote } from './speak'
@@ -239,6 +241,25 @@ export function bestQuestion(view: FruitView, meeting: MeetingView, beliefs: Rec
   return best
 }
 
+/** The fruit in sight it is least sure about: watching it settles the most. Nobody, if all are clear-cut. */
+export function worthWatching(view: FruitView, beliefs: Record<string, number>): string | null {
+  let best: string | null = null
+  let bestDoubt = WATCH_DOUBT
+  for (const o of view.visible) {
+    if (view.cleared.includes(o.id)) continue
+    const p = beliefs[o.id] ?? 0
+    const doubt = p * (1 - p)
+    if (doubt > bestDoubt) {
+      bestDoubt = doubt
+      best = o.id
+    }
+  }
+  return best
+}
+
+/** Only worth watching if it is somewhere between about 15% and 85% likely to be Rotten. */
+const WATCH_DOUBT = 0.13
+
 /** Below this, no question is worth the meeting's time. */
 const QUESTION_WORTH = 0.04
 
@@ -255,17 +276,19 @@ export class BayesianBrain extends HeuristicBrain {
   }
 
   override roam(view: FruitView): RoamAction {
-    return view.role === 'rotten' ? super.roam(view) : crewRoam(view, this.beliefs(view), this.rng, { tailAbove: 0.7 })
+    // As Rotten it thinks about what the crew think of it: silence witnesses, keep scapegoats.
+    if (view.role === 'rotten') return rottenRoam(view, this.plan, this.rng, { bias: killBias(view) })
+    return crewRoam(view, this.beliefs(view), this.rng, { tailAbove: 0.7, curious: worthWatching })
   }
 
   override async speak(view: FruitView, meeting: MeetingView): Promise<MeetingLine> {
-    if (view.role === 'rotten') return rottenSpeak(view, meeting, this.rng)
+    if (view.role === 'rotten') return rottenSpeak(view, meeting, this.rng, { smart: true, table: tableSuspicion(view) })
     return crewSpeak(view, meeting, this.beliefs(view), this.rng, { accuseAbove: ACCUSE_ABOVE, question: bestQuestion })
   }
 
   override async vote(view: FruitView, meeting: MeetingView): Promise<Ballot> {
     const tally = tallySoFar(view)
-    if (view.role === 'rotten') return rottenVote(view, meeting, this.rng, tally)
+    if (view.role === 'rotten') return rottenVote(view, meeting, this.rng, tally, { smart: true })
     return crewVote(view, meeting, this.beliefs(view), this.rng, VOTE_ABOVE, tally)
   }
 }

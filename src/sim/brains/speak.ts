@@ -116,11 +116,11 @@ export function stopAt(view: FruitView, at: number): { room: string; from: numbe
 }
 
 /** The alibi this fruit gives for one moment it was asked about: the truth for crew, a story for the Rotten. */
-export function alibiAt(view: FruitView, at: number, rng: Rng): Extract<Claim, { kind: 'where' }> | null {
+export function alibiAt(view: FruitView, at: number, rng: Rng, smart = false): Extract<Claim, { kind: 'where' }> | null {
   const stop = stopAt(view, at)
   if (!stop) return null
   if (view.role === 'rotten') {
-    const story = alibiFor(view, stop.room, stop.from, stop.to, rng)
+    const story = alibiFor(view, stop.room, stop.from, stop.to, rng, smart)
     return story.kind === 'where' ? { ...story, with: story.room === stop.room ? stop.with : [] } : null
   }
   return { kind: 'where', ...stop }
@@ -131,9 +131,11 @@ export function alibiAt(view: FruitView, at: number, rng: Rng): Extract<Claim, {
  * one they trust most; a Rotten names its partner if it was there (who will back it up), or else
  * anyone (who may well back it up too, if they really did see it).
  */
-function pickWitness(view: FruitView, meeting: MeetingView, claim: Extract<Claim, { kind: 'where' }>, beliefs: Record<string, number>): string | undefined {
+function pickWitness(view: FruitView, meeting: MeetingView, claim: Extract<Claim, { kind: 'where' }>, beliefs: Record<string, number>, smart = false): string | undefined {
   const pool = (claim.with ?? []).filter((id) => id !== view.id && meeting.living.includes(id))
   if (!pool.length) return undefined
+  // A thinking Rotten never leans on its partner: two fruits covering for each other get noticed.
+  if (view.role === 'rotten' && smart) return pool.find((id) => !view.partners.includes(id))
   if (view.role === 'rotten') return pool.find((id) => view.partners.includes(id)) ?? pool[0]
   return [...pool].sort((a, b) => (beliefs[a] ?? 0.5) - (beliefs[b] ?? 0.5))[0]
 }
@@ -205,11 +207,11 @@ function storyCallout(view: FruitView, meeting: MeetingView, rng: Rng): MeetingL
 }
 
 /** The alibi this fruit gives for the run-up: the truth for crew, a story for the Rotten. */
-export function alibi(view: FruitView, rng: Rng): Extract<Claim, { kind: 'where' }> | null {
+export function alibi(view: FruitView, rng: Rng, smart = false): Extract<Claim, { kind: 'where' }> | null {
   const stop = mainStop(view)
   if (!stop) return null
   if (view.role === 'rotten') {
-    const story = alibiFor(view, stop.room, stop.from, stop.to, rng)
+    const story = alibiFor(view, stop.room, stop.from, stop.to, rng, smart)
     return story.kind === 'where' ? { ...story, with: story.room === stop.room ? stop.with : [] } : null
   }
   return { kind: 'where', room: stop.room, from: stop.from, to: stop.to, with: stop.with }
@@ -382,25 +384,25 @@ const ENDGAME_LEAD = 1.25
  * Answering a question or an accusation. Asked about a moment: where it was then. Otherwise:
  * where it spent the run-up. Either way it names a witness if it was with anyone.
  */
-function defence(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, counter: string): MeetingLine {
+function defence(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, counter: string, smart = false): MeetingLine {
   const n = nameFn(view)
   // Someone already backed it up this meeting: point at that rather than asking again.
   const backer = meeting.lines.find((l) => l.line.move === 'corroborate' && l.line.target === view.id && meeting.living.includes(l.who))?.who
   if (backer) {
-    const where = meeting.askedAt !== undefined ? alibiAt(view, meeting.askedAt, rng) : alibi(view, rng)
+    const where = meeting.askedAt !== undefined ? alibiAt(view, meeting.askedAt, rng, smart) : alibi(view, rng, smart)
     const room = where ? placeName(where.room) : ''
     return { move: 'defend', target: view.id, claim: where ?? undefined, say: `${where ? `${room}. ` : ''}${fill(rng.pick(BACKED), { witness: n(backer) }).trim()}${counter}` }
   }
   if (meeting.askedAt !== undefined) {
-    const where = alibiAt(view, meeting.askedAt, rng)
+    const where = alibiAt(view, meeting.askedAt, rng, smart)
     if (where) {
-      const witness = pickWitness(view, meeting, where, beliefs)
+      const witness = pickWitness(view, meeting, where, beliefs, smart)
       return { move: 'defend', target: view.id, claim: where, witness, say: fill(rng.pick(ANSWER_AT), { time: clock(meeting.askedAt), room: placeName(where.room), with: withText(view, where.with) }) + (witness ? fill(rng.pick(WITNESS), { witness: n(witness) }) : '') + counter }
     }
   }
-  const where = alibi(view, rng)
+  const where = alibi(view, rng, smart)
   if (!where) return { move: 'defend', target: view.id, say: `It wasn't me!${counter}` }
-  const witness = pickWitness(view, meeting, where, beliefs)
+  const witness = pickWitness(view, meeting, where, beliefs, smart)
   return { move: 'defend', target: view.id, claim: where, witness, say: fill(rng.pick(DEFEND), { room: placeName(where.room), with: withText(view, where.with) }) + (witness ? fill(rng.pick(WITNESS), { witness: n(witness) }) : '') + counter }
 }
 
@@ -425,28 +427,42 @@ export function crewVote(view: FruitView, meeting: MeetingView, beliefs: Record<
 
 // ---------- Rotten ----------
 
+export interface RottenSpeech {
+  /** Thinks before it speaks: careful alibis, no covering for its partner, frames whoever the table already doubts. */
+  smart?: boolean
+  /** How the table feels about each crew fruit, for picking a scapegoat. */
+  table?: Record<string, number>
+}
+
 /** Who to point the finger at: whoever is accusing it, or whoever the room already doubts. */
-function frameTarget(view: FruitView, meeting: MeetingView, rng: Rng): string | null {
+function frameTarget(view: FruitView, meeting: MeetingView, rng: Rng, table?: Record<string, number>): string | null {
   const crew = living(view, meeting).filter((o) => !view.partners.includes(o.id))
   if (!crew.length) return null
   const accuser = [...meeting.lines].reverse().find((l) => l.line.target === view.id && ['accuse', 'hardClaim', 'contradict'].includes(l.line.move) && crew.some((o) => o.id === l.who))
   if (accuser) return accuser.who
   const piled = [...pile(meeting).entries()].filter(([id]) => crew.some((o) => o.id === id)).sort((a, b) => b[1].size - a[1].size)[0]
   if (piled) return piled[0]
+  // Nobody piled on yet: whoever the table has doubted before makes the easiest scapegoat.
+  if (table) {
+    const doubted = [...crew].sort((a, b) => (table[b.id] ?? 0) - (table[a.id] ?? 0))[0]
+    if (doubted && (table[doubted.id] ?? 0) > 0) return doubted.id
+  }
   return rng.pick(crew).id
 }
 
-export function rottenSpeak(view: FruitView, meeting: MeetingView, rng: Rng): MeetingLine {
+export function rottenSpeak(view: FruitView, meeting: MeetingView, rng: Rng, opts: RottenSpeech = {}): MeetingLine {
   const n = nameFn(view)
   const t = view.traits
+  const framer = t.style === 'framer'
+  const smart = !!opts.smart
   const witness = witnessLine(view, meeting, rng)
   if (witness) return witness
   // Self-report: a confident, detailed story pinning it on someone else.
   if (meeting.step === 'report') {
     if (meeting.body) {
-      const frame = frameTarget(view, meeting, rng)
+      const frame = frameTarget(view, meeting, rng, opts.table)
       const say = fill(rng.pick(FOUND), { victim: n(meeting.body.victim), room: placeName(meeting.body.room) })
-      if (frame && rng.chance(0.4 + t.aggression * 0.4)) {
+      if (frame && rng.chance(framer ? 0.95 : 0.4 + t.aggression * 0.4)) {
         const claim: Claim = { kind: 'saw', what: 'nearBody', who: frame, room: meeting.body.room, at: Math.round(view.time - 3), victim: meeting.body.victim }
         return { move: 'accuse', target: frame, claim, say: `${say} ${fill(rng.pick(FOUND_NEAR), { name: n(frame) })}` }
       }
@@ -457,30 +473,30 @@ export function rottenSpeak(view: FruitView, meeting: MeetingView, rng: Rng): Me
   const accuser = meeting.askedBy ?? onTheSpot(view, meeting)
   if (accuser && meeting.step !== 'roundup') {
     const counter = rng.chance(0.3 + t.aggression * 0.5) ? fill(rng.pick(COUNTER), { name: n(accuser) }) : ''
-    return defence(view, meeting, {}, rng, counter)
+    return defence(view, meeting, {}, rng, counter, smart)
   }
   if (meeting.step === 'roundup') {
-    const where = alibi(view, rng)
+    const where = alibi(view, rng, smart)
     if (where) return { move: 'alibi', claim: where, say: fill(rng.pick(ALIBI), { room: placeName(where.room), with: withText(view, where.with) }) }
     return { move: 'alibi', say: 'Doing my tasks, same as everyone.' }
   }
   const piled = pile(meeting)
   // A partner under fire: defend it, sometimes, which is risky.
   const partner = view.partners.find((p) => piled.has(p) && meeting.living.includes(p))
-  if (partner && rng.chance(isCareless(view) ? 0.5 : 0.2)) return { move: 'vouch', target: partner, say: fill(rng.pick(VOUCH), { name: n(partner) }) }
+  if (partner && rng.chance(smart ? 0.03 : isCareless(view) ? 0.5 : 0.2)) return { move: 'vouch', target: partner, say: fill(rng.pick(VOUCH), { name: n(partner) }) }
   // Join a growing bandwagon against a crew fruit.
   const crowd = [...piled.entries()].filter(([id, s]) => !view.partners.includes(id) && id !== view.id && meeting.living.includes(id) && s.size >= 1 && !s.has(view.id)).sort((a, b) => b[1].size - a[1].size)[0]
   if (crowd && rng.chance(0.7)) return { move: 'bandwagon', target: crowd[0], say: fill(rng.pick(BANDWAGON), { name: n(crowd[0]) }) }
-  // Frame someone, more often when bold.
-  if (rng.chance(0.25 + t.aggression * 0.45)) {
-    const frame = frameTarget(view, meeting, rng)
+  // Frame someone, more often when bold, and all the time if that's its game.
+  if (rng.chance(framer ? 0.85 : 0.25 + t.aggression * 0.45)) {
+    const frame = frameTarget(view, meeting, rng, opts.table)
     if (frame) return { move: 'accuse', target: frame, say: fill(rng.pick(ACCUSE), { name: n(frame), why: rng.pick(rng.chance(0.5) ? WHY.fakeTask : WHY.none) }) }
   }
   return { move: 'skip', say: rng.pick(SKIP) }
 }
 
 /** A Rotten votes with a crowd against a crew fruit, never for its partner, or skips to stay quiet. */
-export function rottenVote(view: FruitView, meeting: MeetingView, rng: Rng, tally: Record<string, number>): Ballot {
+export function rottenVote(view: FruitView, meeting: MeetingView, rng: Rng, tally: Record<string, number>, opts: RottenSpeech = {}): Ballot {
   const crew = meeting.living.filter((id) => id !== view.id && !view.partners.includes(id))
   // The vote is going against it (or its partner): back the runner-up to force a tie.
   const ours = [view.id, ...view.partners]
@@ -496,7 +512,8 @@ export function rottenVote(view: FruitView, meeting: MeetingView, rng: Rng, tall
     .sort((a, b) => b[1] - a[1])[0]
   if (crowd && crowd[1] >= 1) return { target: crowd[0], reason: 'Everyone else seems sure.' }
   const piled = [...pile(meeting).entries()].filter(([id]) => crew.includes(id)).sort((a, b) => b[1].size - a[1].size)[0]
-  if (piled && rng.chance(0.7)) return { target: piled[0], reason: 'You all heard what was said.' }
+  // A lone vote stands out. A thinking Rotten only votes where others will follow.
+  if (piled && (!opts.smart || piled[1].size >= 2) && rng.chance(0.7)) return { target: piled[0], reason: 'You all heard what was said.' }
   return { target: 'skip', reason: 'We do not know enough.' }
 }
 
