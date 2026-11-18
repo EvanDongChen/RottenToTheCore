@@ -1,41 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <title>Rotten to the Core</title>
-  <!-- An apple core on stick legs: bitten on both sides, with a rotten patch creeping in and a sly look. -->
-  <g stroke="#2a1a12" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Legs -->
-    <path d="M54 104 L48 120 M74 104 L80 120" fill="none" />
-    <path d="M41 121 h10 M77 121 h10" fill="none" />
-    <!-- Stem and leaf -->
-    <path d="M64 22 C63 14 66 9 70 6" fill="none" />
-    <path d="M68 13 C78 4 92 8 94 14 C84 19 74 19 68 13 Z" fill="#4c9a3b" />
-    <!-- The core: red skin top and bottom, pale flesh pinched in where the bites are -->
-    <path d="M38 34 C38 22 52 18 64 24 C76 18 90 22 90 34 C90 40 86 44 80 46
-             C74 52 72 62 74 70 C76 78 82 82 86 86 C90 92 86 104 76 106 C70 107 66 104 64 104
-             C62 104 58 107 52 106 C42 104 38 92 42 86 C46 82 52 78 54 70
-             C56 62 54 52 48 46 C42 44 38 40 38 34 Z" fill="#fff3d6" />
-    <path d="M38 34 C38 22 52 18 64 24 C76 18 90 22 90 34 C90 40 86 44 80 46 C70 42 58 42 48 46 C42 44 38 40 38 34 Z" fill="#d8342c" />
-    <path d="M42 86 C46 82 50 81 64 82 C78 81 82 82 86 86 C90 92 86 104 76 106 C70 107 66 104 64 104 C62 104 58 107 52 106 C42 104 38 92 42 86 Z" fill="#d8342c" />
+  <!-- A two-faced apple: fresh and wide-eyed on one side, rotten and sly on the other. -->
+  <defs><clipPath id="a"><path d="M64 36 C52 25 24 27 22 56 C20 84 40 112 54 112 C58 112 61 110 64 110 C67 110 70 112 74 112 C88 112 108 84 106 56 C104 27 76 25 64 36 Z"/></clipPath></defs>
+  <path d="M64 36 C63 26 65 18 69 12" fill="none" stroke="#2a1a12" stroke-width="4.5" stroke-linecap="round"/><path d="M67 22 C76 10 94 12 98 19 C88 27 74 28 67 22 Z" fill="#4c9a3b" stroke="#2a1a12" stroke-width="4" stroke-linejoin="round"/>
+  <g clip-path="url(#a)">
+    <rect width="128" height="128" fill="#d8342c"/>
+    <path d="M64 30 L70 44 L62 56 L71 68 L61 80 L70 92 L63 104 L66 128 L128 128 L128 0 L64 0 Z" fill="#8f6233"/>
+    <circle cx="90" cy="92" r="5" fill="#6b4520"/><circle cx="82" cy="104" r="3" fill="#6b4520"/><circle cx="96" cy="50" r="3.5" fill="#6b4520"/>
+    <path d="M30 50 C32 40 40 36 46 36" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="5" stroke-linecap="round"/>
   </g>
-  <!-- Bite marks -->
-  <g fill="#fff3d6">
-    <circle cx="49" cy="52" r="3" />
-    <circle cx="49" cy="62" r="3" />
-    <circle cx="79" cy="56" r="3" />
-    <circle cx="79" cy="66" r="3" />
-  </g>
-  <!-- The rot, creeping in -->
-  <path d="M60 56 C66 52 74 56 72 64 C70 72 62 74 58 68 C55 64 56 58 60 56 Z" fill="#8a6a3b" />
-  <circle cx="66" cy="63" r="3.2" fill="#5e4524" />
-  <circle cx="61" cy="59" r="1.8" fill="#5e4524" />
-  <!-- Seeds -->
-  <g fill="#2a1a12">
-    <ellipse cx="60" cy="76" rx="2" ry="3.4" transform="rotate(-20 60 76)" />
-    <ellipse cx="68" cy="76" rx="2" ry="3.4" transform="rotate(20 68 76)" />
-  </g>
-  <!-- The sly face on the skin: one eye half shut, a smirk -->
-  <g stroke="#2a1a12" stroke-width="3" stroke-linecap="round" fill="none">
-    <path d="M53 33 h6" />
-    <circle cx="73" cy="33" r="2.4" fill="#2a1a12" stroke="none" />
-    <path d="M57 39 C62 42 68 41 72 37" />
-  </g>
+  <path d="M64 36 C52 25 24 27 22 56 C20 84 40 112 54 112 C58 112 61 110 64 110 C67 110 70 112 74 112 C88 112 108 84 106 56 C104 27 76 25 64 36 Z" fill="none" stroke="#2a1a12" stroke-width="4.5" stroke-linejoin="round"/>
+  <circle cx="44" cy="64" r="9" fill="#fff" stroke="#2a1a12" stroke-width="3.5"/>
+  <circle cx="46" cy="65" r="4.2" fill="#2a1a12"/>
+  <path d="M75 63 C79 57 91 57 94 62 L94 64 C90 69 79 69 75 64 Z" fill="#fff6c4" stroke="#2a1a12" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M75 62 C80 59 90 59 95 62" fill="none" stroke="#2a1a12" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="87" cy="64" r="2.6" fill="#2a1a12"/>
+  <path d="M74 52 L95 56" stroke="#2a1a12" stroke-width="4" stroke-linecap="round"/>
+  <path d="M46 86 C56 92 72 92 86 80" fill="none" stroke="#2a1a12" stroke-width="4" stroke-linecap="round"/>
 </svg>
