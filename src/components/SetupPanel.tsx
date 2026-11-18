@@ -122,6 +122,20 @@ export default function SetupPanel() {
         <label className="check">
           <input type="checkbox" checked={rules.ghostTasks} onChange={(e) => setRules({ ghostTasks: e.target.checked })} /> Ghosts finish tasks
         </label>
+        <label className="check">
+          <input type="checkbox" checked={rules.meltdown} onChange={(e) => setRules({ meltdown: e.target.checked })} /> Meltdown sabotage
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={rules.doors} onChange={(e) => setRules({ doors: e.target.checked })} /> Door sabotage
+        </label>
+        <label>
+          Engineers (can vent)
+          <input type="number" min={0} max={2} value={rules.engineers} onChange={(e) => setRules({ engineers: Math.max(0, Math.min(2, Number(e.target.value) || 0)) })} />
+        </label>
+        <label>
+          Scientists (see deaths)
+          <input type="number" min={0} max={2} value={rules.scientists} onChange={(e) => setRules({ scientists: Math.max(0, Math.min(2, Number(e.target.value) || 0)) })} />
+        </label>
         <label>
           Ejected fruits go
           <select value={settings.ejectStyle} onChange={(e) => setSettings({ ejectStyle: e.target.value as 'juicer' | 'compost' })}>

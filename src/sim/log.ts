@@ -25,8 +25,8 @@ export type SimEvent =
   | { t: number; kind: 'kill'; killer: string; victim: string; at: Vec2; room: string; witnesses: string[] }
   | { t: number; kind: 'found'; who: string; body: string }
   | { t: number; kind: 'vent'; who: string; from: string; to: string; seenBy: string[] }
-  | { t: number; kind: 'sabotage'; who: string; what: 'lights' }
-  | { t: number; kind: 'fixed'; who: string; what: 'lights' }
+  | { t: number; kind: 'sabotage'; who: string; what: 'lights' | 'meltdown' | 'doors'; room?: string }
+  | { t: number; kind: 'fixed'; who: string; what: 'lights' | 'meltdown' | 'doors' }
   | { t: number; kind: 'witness'; who: string; saw: string; about: string; bent?: boolean }
   | { t: number; kind: 'chat'; who: string; to: string; say: string; topic: string; accuses?: string; vouches?: string; claim?: Claim; source?: string }
   | { t: number; kind: 'encounter'; a: string; b: string; what: string }

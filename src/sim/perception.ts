@@ -1,5 +1,6 @@
 import { crossesWall } from './geom'
-import { CAMERAS, dist, MONITORS, WALLS } from './map'
+import { CAMERAS, dist, doorsOf, doorWall, MONITORS, WALLS } from './map'
+import type { Wall } from './map'
 import type { Game, SimFruit } from './engine'
 import type { Vec2 } from './types'
 
@@ -33,10 +34,11 @@ export function visionRadius(game: Game, f: SimFruit): number {
   return game.lightsOut ? game.rules.lightsOutVision : game.rules.crewVision
 }
 
-/** True when nothing blocks the straight line from a to b. */
-export function clearLine(a: Vec2, aArea: string, b: Vec2, bArea: string): boolean {
+/** True when nothing blocks the straight line from a to b. `extra` adds walls (closed doors). */
+export function clearLine(a: Vec2, aArea: string, b: Vec2, bArea: string, extra?: readonly Wall[]): boolean {
   if (aArea === bArea) return true
   for (const w of WALLS) if (crossesWall(a, b, w)) return false
+  if (extra) for (const w of extra) if (crossesWall(a, b, w)) return false
   return true
 }
 
@@ -48,6 +50,7 @@ function onCamera(p: Vec2, pArea: string): boolean {
 /** Work out what everyone sees this tick. Only living fruits see or are seen; ghosts are invisible. */
 export function updateVision(game: Game) {
   const vision = emptyVision()
+  const shut = game.locked ? doorsOf(game.locked.room).map(doorWall) : undefined
   const living = game.fruits.filter((f) => f.alive)
   const radius = new Map(living.map((f) => [f.id, visionRadius(game, f)]))
   for (const f of living) vision.sees.set(f.id, new Set())
@@ -61,7 +64,7 @@ export function updateVision(game: Game) {
       const rb = radius.get(b.id)!
       if (d > Math.max(ra, rb)) continue
       // The line is the same both ways, so it is tested once per pair.
-      if (!clearLine(a.pos, a.area, b.pos, b.area)) continue
+      if (!clearLine(a.pos, a.area, b.pos, b.area, shut)) continue
       if (d <= ra) vision.sees.get(a.id)!.add(b.id)
       if (d <= rb) vision.sees.get(b.id)!.add(a.id)
     }
@@ -70,7 +73,7 @@ export function updateVision(game: Game) {
   for (const f of living) {
     const seen: string[] = []
     for (const body of game.bodies) {
-      if (dist(f.pos, body.pos) <= radius.get(f.id)! && clearLine(f.pos, f.area, body.pos, body.area)) seen.push(body.id)
+      if (dist(f.pos, body.pos) <= radius.get(f.id)! && clearLine(f.pos, f.area, body.pos, body.area, shut)) seen.push(body.id)
     }
     vision.bodies.set(f.id, seen)
   }

@@ -3,7 +3,8 @@ import { Text } from '@react-three/drei'
 import { Object3D } from 'three'
 import type { InstancedMesh } from 'three'
 import fontUrl from '@fontsource/lilita-one/files/lilita-one-latin-400-normal.woff?url'
-import { AREAS, centre, ROOMS, VENTS, WALL_HEIGHT, WALLS } from '../sim/map'
+import { AREAS, centre, doorsOf, MELTDOWN_PANELS, ROOMS, VENTS, WALL_HEIGHT, WALLS } from '../sim/map'
+import { useSim } from '../ui/store'
 import MeetingTable from './MeetingTable'
 import TaskStations from './TaskStation'
 
@@ -101,6 +102,41 @@ export default function LabMap() {
 
       <MeetingTable />
       <TaskStations />
+      <LockedDoors />
+      <MeltdownPanels />
     </group>
+  )
+}
+
+/** Red bars across the doorways of a room the Rotten have locked. */
+function LockedDoors() {
+  const room = useSim((s) => s.lockedRoom)
+  if (!room) return null
+  return (
+    <>
+      {doorsOf(room).map((d) => (
+        <mesh key={d.id} position={[d.at[0], WALL_HEIGHT / 2, d.at[1]]} rotation={[0, d.along[0] ? 0 : Math.PI / 2, 0]} castShadow>
+          <boxGeometry args={[d.half * 2, WALL_HEIGHT * 0.9, 0.25]} />
+          <meshStandardMaterial color="#e2412f" />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
+/** The two meltdown panels in the Ripening Chamber, glowing red while a meltdown is on. Shown only with the rule. */
+function MeltdownPanels() {
+  const on = useSim((s) => s.settings.rules.meltdown || s.meltdownAt !== null)
+  const hot = useSim((s) => s.meltdownAt !== null)
+  if (!on) return null
+  return (
+    <>
+      {MELTDOWN_PANELS.map((p, i) => (
+        <mesh key={i} position={[p[0], 0.03, p[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.8, 24]} />
+          <meshBasicMaterial color={hot ? '#ff3b2f' : '#f6b62e'} transparent opacity={hot ? 0.85 : 0.5} />
+        </mesh>
+      ))}
+    </>
   )
 }

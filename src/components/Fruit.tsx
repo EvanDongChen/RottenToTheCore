@@ -623,6 +623,7 @@ export default function Fruit({ id }: { id: string }) {
               <div className="name">
                 {fruit.name}
                 {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
+                {showRole && fruit.perk && <span className="role perk">{fruit.perk === 'engineer' ? 'Engineer' : 'Scientist'}</span>}
                 {/* Blushing and nervous shaking already show on the face, so they get no mark here. */}
                 {reaction && reaction !== 'blush' && reaction !== 'shake' && <Emote reaction={reaction} big={dramatic} />}
               </div>

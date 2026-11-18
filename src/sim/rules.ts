@@ -20,6 +20,10 @@ export const DEFAULT_RULES: Rules = {
   discussionTurns: 12,
   confirmEjects: true,
   ghostTasks: false,
+  meltdown: false,
+  doors: false,
+  engineers: 0,
+  scientists: 0,
 }
 
 /** Most Rotten a game of this size can hold while still being outnumbered at the start. */

@@ -1,4 +1,5 @@
-import { FUSE_BOX, dist, ROOMS, station } from '../map'
+import { FUSE_BOX, dist, ROOMS, station, VENTS } from '../map'
+import type { Vec2 } from '../types'
 import { walkDistance } from '../nav'
 import type { Rng } from '../rng'
 import type { FruitView } from '../view'
@@ -48,8 +49,13 @@ export function crewRoam(view: FruitView, beliefs: Record<string, number>, rng: 
     const body = view.bodies.reduce((a, b) => (dist(view.pos, a.pos) <= dist(view.pos, b.pos) ? a : b))
     return { kind: 'report', body: body.id }
   }
+  // A meltdown: everyone runs to the panels. Nothing else matters if it goes off.
+  if (view.meltdownIn !== null) return { kind: 'fixSabotage' }
+
   // Saw a kill or a vent: sprint to the button.
   if (hardEvidence(view) && view.emergenciesLeft > 0) return { kind: 'emergency' }
+  // A scientist's vitals board shows a death nobody has reported yet: call everyone in.
+  if (view.perk === 'scientist' && view.emergenciesLeft > 0 && view.buttonReady && unreportedDeath(view)) return { kind: 'emergency' }
   if (view.action.kind === 'emergency') return view.action
 
   // Lights out: the brave and the nearby go and fix them.
@@ -67,6 +73,11 @@ export function crewRoam(view: FruitView, beliefs: Record<string, number>, rng: 
   if (view.action.kind === 'follow' && view.visible.some((o) => o.id === (view.action as { who: string }).who) && rng.chance(0.85)) return view.action
 
   const task = nextTask(view)
+  // An engineer takes a vent when it is a shortcut to the next task.
+  if (task && view.perk === 'engineer') {
+    const shortcut = ventShortcut(view, station(task).at)
+    if (shortcut) return { kind: 'vent', to: shortcut }
+  }
   if (task) return { kind: 'goTask', station: task }
 
   // All done: drift about, or tag along with whoever it trusts most.
@@ -74,4 +85,20 @@ export function crewRoam(view: FruitView, beliefs: Record<string, number>, rng: 
   const friend = view.visible.filter((o) => (beliefs[o.id] ?? 0.5) < 0.15).sort((a, b) => beliefs[a.id] - beliefs[b.id])[0]
   if (friend && t.aggression < 0.5 && rng.chance(0.4)) return { kind: 'follow', who: friend.id }
   return { kind: 'wander', room: rng.pick(ROOMS).id }
+}
+
+/** Someone the vitals board shows dead, whose death no meeting has made public. */
+function unreportedDeath(view: FruitView): boolean {
+  const publicDead = new Set(view.public.filter((e) => e.kind === 'dead' || e.kind === 'eject').map((e) => (e.kind === 'dead' || e.kind === 'eject' ? e.who : '')))
+  return view.others.some((o) => !o.alive && !publicDead.has(o.id))
+}
+
+/** A vent in this room whose other end saves a long walk to `goal`. */
+function ventShortcut(view: FruitView, goal: Vec2): string | null {
+  const here = VENTS.find((v) => v.room === view.area)
+  if (!here) return null
+  const exit = VENTS.find((v) => v.id === here.to)!
+  const walk = walkDistance(view.pos, goal)
+  const viaVent = dist(view.pos, here.at) + walkDistance(exit.at, goal)
+  return viaVent + 10 < walk ? exit.id : null
 }

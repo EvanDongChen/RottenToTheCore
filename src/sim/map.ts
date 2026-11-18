@@ -109,6 +109,12 @@ export const STATIONS: Station[] = [
   { id: 'fridge', room: 'cold', name: 'Restock the fridge', at: [-5, 16.5], length: 'short', visual: false },
 ]
 
+/** The two panels that must both be held to stop a meltdown, in the Ripening Chamber. */
+export const MELTDOWN_PANELS: Vec2[] = [
+  [-27, 11.5],
+  [-19.5, 17.5],
+]
+
 /** Where the lights are fixed after a sabotage. */
 export const FUSE_BOX: Vec2 = [-26.5, 3]
 /** The emergency button sits on the meeting table. A fruit presses it from the table's edge. */
@@ -307,4 +313,14 @@ export function station(id: string): Station {
 
 export function vent(id: string): Vent {
   return VENTS.find((v) => v.id === id)!
+}
+
+/** The doors of a room (each door joins it to one hallway). */
+export function doorsOf(room: string): Door[] {
+  return DOORS.filter((d) => d.areas[0] === room)
+}
+
+/** A closed door as a wall across its opening. */
+export function doorWall(d: Door): Wall {
+  return [d.at[0] - d.along[0] * d.half, d.at[1] - d.along[1] * d.half, d.at[0] + d.along[0] * d.half, d.at[1] + d.along[1] * d.half]
 }

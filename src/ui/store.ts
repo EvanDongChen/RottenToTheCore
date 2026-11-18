@@ -9,7 +9,7 @@ import type { Game } from '../sim/engine'
 import { makeRng } from '../sim/rng'
 import { makeFruit } from '../sim/roster'
 import { DEFAULT_RULES, MAX_FRUITS, MIN_FRUITS } from '../sim/rules'
-import type { FruitDef, FruitKind, Mood, Phase, Reaction, Role, Rules, Traits, Winner } from '../sim/types'
+import type { FruitDef, FruitKind, Mood, Perk, Phase, Reaction, Role, Rules, Traits, Winner } from '../sim/types'
 
 /**
  * The bridge between the sim and the screen. The sim never touches React: after each frame's
@@ -25,6 +25,8 @@ export interface UiFruit {
   kind: FruitKind
   traits: Traits
   role: Role
+  /** A crew fruit's special ability (stretch rules), if any. */
+  perk: Perk | null
   alive: boolean
   mood: Mood
   thought: string
@@ -137,7 +139,7 @@ export function uiFruits(g: Game): UiFruit[] {
     const suspect = Object.keys(beliefs)
       .filter((id) => beliefs[id] > 0.4)
       .sort((a, b) => beliefs[b] - beliefs[a])[0]
-    return { id: f.id, name: f.def.name, kind: f.def.kind, traits: f.def.traits, role: f.role, alive: f.alive, mood: { ...f.mind.mood }, thought: f.mind.thought, suspect, beliefs: { ...beliefs } }
+    return { id: f.id, name: f.def.name, kind: f.def.kind, traits: f.def.traits, role: f.role, perk: f.perk, alive: f.alive, mood: { ...f.mind.mood }, thought: f.mind.thought, suspect, beliefs: { ...beliefs } }
   })
 }
 
@@ -219,6 +221,10 @@ export interface SimState {
   /** Ballots cast so far in a meeting: voter id to target id (or 'skip'). */
   votes: Record<string, string>
   lightsOut: boolean
+  /** Sim time a meltdown goes off, if one is going. */
+  meltdownAt: number | null
+  /** A room locked by sabotage. */
+  lockedRoom: string | null
   paused: boolean
   speed: number
   revealRoles: boolean
@@ -284,6 +290,8 @@ function freshState(g: Game) {
     focusId: null,
     votes: {},
     lightsOut: false,
+    meltdownAt: null,
+    lockedRoom: null,
   }
 }
 

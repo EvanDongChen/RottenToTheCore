@@ -1,9 +1,9 @@
 import type { RoamAction } from './brains/types'
 import { DECIDE_EVERY, FIX_TIME, REPORT_REACH, SABOTAGE_COOLDOWN, STATION_REACH, TICK, VENT_REACH, WALK_SPEED } from './constants'
-import { fruitById, logEvent } from './engine'
+import { endGame, fruitById, logEvent } from './engine'
 import type { Body, Game, SimFruit } from './engine'
 import { round } from './log'
-import { areaAt, BUTTON, BUTTON_REACH, dist, FUSE_BOX, isRoom, OBSTACLE_MARGIN, OBSTACLES, randomSpot, station, STATIONS, vent, VENTS } from './map'
+import { areaAt, BUTTON, BUTTON_REACH, dist, doorsOf, FUSE_BOX, isRoom, MELTDOWN_PANELS, OBSTACLE_MARGIN, OBSTACLES, randomSpot, station, STATIONS, vent, VENTS } from './map'
 import { feel } from './mind'
 import { findPath } from './nav'
 import { clearLine, sees, visionRadius } from './perception'
@@ -17,6 +17,12 @@ const BELIEFS_EVERY = 3
 /** A chasing or following fruit re-plans its path this often, in ticks. */
 const CHASE_REPLAN = 5
 const FOLLOW_GAP = 2.5
+/** How long a meltdown takes to finish the crew, unless stopped. */
+export const MELTDOWN_TIME = 40
+/** How long a room stays locked. */
+export const LOCK_TIME = 10
+/** Standing this close to a meltdown panel holds it. */
+const PANEL_REACH = 0.9
 /** How much faster a hurrying fruit walks. */
 export const HURRY = 1.35
 
@@ -73,11 +79,23 @@ export function avoidObstacles(from: Vec2, to: Vec2, lane: number): Vec2 {
   return to
 }
 
-/** Plan a path to `goal`, unless already heading there. */
-function walkTo(f: SimFruit, goal: Vec2) {
+/** Doors that are shut right now (a room locked by sabotage). */
+export function blockedDoors(game: Game): Set<string> | undefined {
+  return game.locked ? new Set(doorsOf(game.locked.room).map((d) => d.id)) : undefined
+}
+
+/** Plan a path to `goal`, unless already heading there. Goes round locked doors. */
+function walkTo(game: Game, f: SimFruit, goal: Vec2) {
   if (f.goal && dist(goal, f.goal) < 0.3 && (f.path.length || dist(f.pos, goal) < 0.3)) return
-  f.path = findPath(f.pos, goal, f.lane)
+  f.path = findPath(f.pos, goal, f.lane, blockedDoors(game))
   f.goal = goal
+}
+
+/** The meltdown panel this fruit should hold: the nearer one, unless someone is already at it. */
+function panelFor(game: Game, f: SimFruit): Vec2 {
+  const held = (p: Vec2) => game.fruits.some((o) => o !== f && o.alive && dist(o.pos, p) < PANEL_REACH)
+  const [a, b] = [...MELTDOWN_PANELS].sort((x, y) => dist(f.pos, x) - dist(f.pos, y))
+  return held(a) && !held(b) ? b : a
 }
 
 export function stop(f: SimFruit) {
@@ -154,15 +172,20 @@ export function repair(game: Game, f: SimFruit, a: RoamAction | undefined): Roam
     case 'emergency':
       return f.emergencies > 0 ? a : fallback()
     case 'fixSabotage':
-      return game.lightsOut ? a : fallback()
+      return game.lightsOut || game.meltdown ? a : fallback()
     case 'idle':
       return a
     case 'kill':
       return rotten && target && target.alive && target.role === 'crew' ? a : fallback()
     case 'vent':
-      return rotten && VENTS.some((v) => v.id === a.to) ? a : fallback()
+      // The Rotten, and engineers among the crew, can use the vents.
+      return (rotten || (f.alive && f.perk === 'engineer')) && VENTS.some((v) => v.id === a.to) ? a : fallback()
     case 'sabotage':
-      return rotten && a.what === 'lights' ? a : fallback()
+      if (!rotten) return fallback()
+      if (a.what === 'lights') return a
+      if (a.what === 'meltdown') return game.rules.meltdown ? a : fallback()
+      if (a.what === 'doors') return game.rules.doors && a.room && isRoom(a.room) ? a : fallback()
+      return fallback()
     default:
       return fallback()
   }
@@ -176,26 +199,26 @@ export function setAction(game: Game, f: SimFruit, a: RoamAction) {
   switch (a.kind) {
     case 'goTask':
     case 'fakeTask':
-      walkTo(f, stationSpot(a.station, f.lane))
+      walkTo(game, f, stationSpot(a.station, f.lane))
       break
     case 'wander':
-      walkTo(f, randomSpot(f.rng, a.room))
+      walkTo(game, f, randomSpot(f.rng, a.room))
       if (a.hurry) f.hurryUntil = game.time + 8
       break
     case 'report': {
       const body = game.bodies.find((b) => b.id === a.body)
-      if (body) walkTo(f, body.pos)
+      if (body) walkTo(game, f, body.pos)
       break
     }
     case 'emergency':
-      walkTo(f, buttonSpot(f))
+      walkTo(game, f, buttonSpot(f))
       break
     case 'fixSabotage':
-      walkTo(f, FUSE_BOX)
+      walkTo(game, f, game.meltdown ? panelFor(game, f) : FUSE_BOX)
       break
     case 'vent': {
       const entry = VENTS.find((v) => v.to === a.to)!
-      walkTo(f, entry.at)
+      walkTo(game, f, entry.at)
       break
     }
     case 'idle':
@@ -234,7 +257,7 @@ export function resolveActions(game: Game) {
         const gap = Math.max(1.5, Math.min(8, a.gap ?? FOLLOW_GAP))
         // Close enough: stop at once, every tick, so a stalker never creeps into view.
         if (dist(f.pos, t.pos) <= gap) stop(f)
-        else if (game.tick % CHASE_REPLAN === 0 && sees(game, f.id, t.id)) walkTo(f, t.pos)
+        else if (game.tick % CHASE_REPLAN === 0 && sees(game, f.id, t.id)) walkTo(game, f, t.pos)
         break
       }
       case 'kill': {
@@ -245,7 +268,7 @@ export function resolveActions(game: Game) {
         }
         if (dist(f.pos, t.pos) <= game.rules.killRange && game.time >= f.killReadyAt) kill(game, f, t)
         else if (game.tick % CHASE_REPLAN === 0) {
-          if (sees(game, f.id, t.id)) walkTo(f, t.pos)
+          if (sees(game, f.id, t.id)) walkTo(game, f, t.pos)
           else f.decideAt = game.time
         }
         break
@@ -263,6 +286,11 @@ export function resolveActions(game: Game) {
         }
         break
       case 'fixSabotage':
+        // A meltdown is held off by standing at the panels (see sabotageTimers).
+        if (game.meltdown) {
+          if (game.tick % CHASE_REPLAN === 0 && dist(f.pos, f.goal ?? f.pos) > PANEL_REACH) walkTo(game, f, panelFor(game, f))
+          break
+        }
         if (!game.lightsOut) f.decideAt = game.time
         else if (dist(f.pos, FUSE_BOX) < 0.8) {
           f.fixSince ??= game.time
@@ -280,16 +308,48 @@ export function resolveActions(game: Game) {
         break
       }
       case 'sabotage':
-        if (!game.lightsOut && game.time >= game.sabotageReadyAt) {
-          game.lightsOut = true
+        // One sabotage at a time, after the cooldown.
+        if (!game.lightsOut && !game.meltdown && !game.locked && game.time >= game.sabotageReadyAt) {
           game.stats.sabotages++
-          logEvent(game, { t: round(game.time), kind: 'sabotage', who: f.id, what: 'lights' })
-          for (const o of game.fruits) if (o.alive && o.role === 'crew') feel(o.mind, 'fear', 0.15 + (1 - o.def.traits.aggression) * 0.15)
+          if (a.what === 'lights') game.lightsOut = true
+          else if (a.what === 'meltdown') game.meltdown = { until: game.time + MELTDOWN_TIME }
+          else if (a.what === 'doors' && a.room) game.locked = { room: a.room, until: game.time + LOCK_TIME }
+          logEvent(game, { t: round(game.time), kind: 'sabotage', who: f.id, what: a.what, room: a.what === 'doors' ? a.room : undefined })
+          const scare = a.what === 'meltdown' ? 0.3 : 0.15
+          for (const o of game.fruits) if (o.alive && o.role === 'crew') feel(o.mind, 'fear', scare + (1 - o.def.traits.aggression) * 0.15)
+          // A meltdown sends the crew running at once, and locked doors change every path.
+          if (a.what !== 'lights') for (const o of game.fruits) if (o.alive) o.decideAt = game.time
+          if (game.locked) for (const o of game.fruits) if (o.path.length && o.goal) o.path = findPath(o.pos, o.goal, o.lane, blockedDoors(game))
         }
         f.action = { kind: 'idle' }
         f.decideAt = game.time
         break
     }
+  }
+}
+
+/**
+ * Sabotage clocks, once per tick. A meltdown is stopped when living fruits stand at both panels
+ * at once; if it runs out, the Rotten win. Locked doors open again after a while.
+ */
+export function sabotageTimers(game: Game) {
+  if (game.phase !== 'roam') return
+  if (game.meltdown) {
+    const holders = MELTDOWN_PANELS.map((p) => game.fruits.find((f) => f.alive && dist(f.pos, p) < PANEL_REACH))
+    if (holders[0] && holders[1] && holders[0] !== holders[1]) {
+      game.meltdown = null
+      game.sabotageReadyAt = game.time + SABOTAGE_COOLDOWN
+      logEvent(game, { t: round(game.time), kind: 'fixed', who: holders[0].id, what: 'meltdown' })
+      for (const f of game.fruits) if (f.alive) f.decideAt = game.time
+    } else if (game.time >= game.meltdown.until) {
+      endGame(game, 'rotten', 'meltdown')
+    }
+  }
+  if (game.locked && game.time >= game.locked.until) {
+    game.locked = null
+    game.sabotageReadyAt = game.time + SABOTAGE_COOLDOWN
+    logEvent(game, { t: round(game.time), kind: 'fixed', who: '', what: 'doors' })
+    for (const f of game.fruits) if (f.alive) f.decideAt = game.time
   }
 }
 

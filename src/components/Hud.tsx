@@ -40,6 +40,7 @@ export default function Hud() {
   const revealRoles = useSim((s) => s.revealRoles)
   const votes = useSim((s) => s.votes)
   const problem = useSim((s) => s.problem)
+  const meltdownAt = useSim((s) => s.meltdownAt)
   const views = useSim(useShallow((s) => Object.fromEntries(VIEWS.map((v) => [v.key, s[v.key]])) as Record<Toggle, boolean>))
   const [menu, setMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -75,6 +76,7 @@ export default function Hud() {
         <div className="plank">
           <span className="phase">{PHASE_LABEL[phase]}</span>
           <span className="clock">{clock(time)}</span>
+          {meltdownAt !== null && <span className="meltdown">Meltdown {Math.max(0, Math.ceil(meltdownAt - time))}s</span>}
         </div>
         <div className="taskbar" title={`${bar.done} of ${bar.total} tasks done`}>
           <i style={{ width: `${(bar.done / Math.max(1, bar.total)) * 100}%` }} />

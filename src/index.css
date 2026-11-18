@@ -2375,3 +2375,24 @@ button.on {
     transform: none;
   }
 }
+
+.meltdown {
+  font-family: var(--display);
+  font-size: 16px;
+  color: #fff;
+  background: #e2412f;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 1px 8px;
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    transform: scale(1.08);
+  }
+}
+
+.role.perk {
+  color: #1f8a5b;
+}

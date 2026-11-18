@@ -360,6 +360,8 @@ function votedOnBentMemory(game: Game, out: SimFruit): boolean {
 export function endMeeting(game: Game) {
   game.meeting = null
   game.lightsOut = false
+  game.meltdown = null
+  game.locked = null
   game.buttonReadyAt = game.time + BUTTON_COOLDOWN
   for (const f of game.fruits) {
     f.decideAt = game.time

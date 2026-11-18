@@ -24,8 +24,8 @@ const LINKS = new Map<string, { door: Door; cost: number }[]>(
   ]),
 )
 
-/** A* from a point to a point. Returns the doors to pass through, in order. */
-function doorChain(from: Vec2, to: Vec2): Door[] {
+/** A* from a point to a point. Returns the doors to pass through, in order, or null if there is no way. */
+function doorChain(from: Vec2, to: Vec2, blocked?: ReadonlySet<string>): Door[] | null {
   const start = areaAt(from)
   const goal = areaAt(to)
   if (start === goal) return []
@@ -34,6 +34,7 @@ function doorChain(from: Vec2, to: Vec2): Door[] {
   const parent = new Map<Door, Door | null>()
   const open: Door[] = []
   for (const d of DOORS_IN.get(start) ?? []) {
+    if (blocked?.has(d.id)) continue
     g.set(d, dist(from, d.at))
     parent.set(d, null)
     open.push(d)
@@ -64,6 +65,7 @@ function doorChain(from: Vec2, to: Vec2): Door[] {
       }
     }
     for (const { door, cost } of LINKS.get(d.id)!) {
+      if (blocked?.has(door.id)) continue
       const next = g.get(d)! + cost
       if (next < (g.get(door) ?? Infinity)) {
         g.set(door, next)
@@ -72,14 +74,20 @@ function doorChain(from: Vec2, to: Vec2): Door[] {
       }
     }
   }
+  if (!best) return null
   const chain: Door[] = []
-  for (let d = best; d; d = parent.get(d) ?? null) chain.unshift(d)
+  for (let d: Door | null = best; d; d = parent.get(d) ?? null) chain.unshift(d)
   return chain
 }
 
-/** The points to walk through to get from `from` to `to`, ending at `to`. */
-export function findPath(from: Vec2, to: Vec2, lane = 0): Vec2[] {
-  const points: Vec2[] = doorChain(from, to).map((d) => {
+/**
+ * The points to walk through to get from `from` to `to`, ending at `to`. With doors locked
+ * (`blocked`), the way round them; if there is none, an empty path (stay put).
+ */
+export function findPath(from: Vec2, to: Vec2, lane = 0, blocked?: ReadonlySet<string>): Vec2[] {
+  const chain = doorChain(from, to, blocked)
+  if (!chain) return []
+  const points: Vec2[] = chain.map((d) => {
     const shift = lane * d.half * LANE_SPREAD
     return [d.at[0] + d.along[0] * shift, d.at[1] + d.along[1] * shift]
   })

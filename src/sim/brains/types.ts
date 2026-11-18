@@ -38,7 +38,8 @@ export type RoamAction =
   // Rotten only
   | { kind: 'kill'; who: string }
   | { kind: 'vent'; to: string }
-  | { kind: 'sabotage'; what: 'lights' }
+  /** Lights out; a meltdown (needs the rule); or lock a room's doors (needs the rule). */
+  | { kind: 'sabotage'; what: 'lights' | 'meltdown' | 'doors'; room?: string }
   | { kind: 'fakeTask'; station: string }
 
 /** Something a fruit says happened. Structured so the sim can check it without reading text. */

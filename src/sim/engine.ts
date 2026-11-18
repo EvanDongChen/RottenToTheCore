@@ -1,4 +1,4 @@
-import { decide, resolveActions, walk } from './actions'
+import { decide, resolveActions, sabotageTimers, walk } from './actions'
 import { makeBrain } from './brains'
 import type { LlmOptions } from './brains/llm'
 import type { Brain, BrainKind, Claim, RoamAction } from './brains/types'
@@ -17,7 +17,7 @@ import { makeRng } from './rng'
 import type { Rng } from './rng'
 import { makeRoster } from './roster'
 import { DEFAULT_RULES } from './rules'
-import type { FruitDef, Phase, Role, Rules, Vec2, Winner } from './types'
+import type { FruitDef, Perk, Phase, Role, Rules, Vec2, Winner } from './types'
 import { observe } from './witness'
 
 export { TICK, TICKS_PER_SECOND, WALK_SPEED } from './constants'
@@ -97,6 +97,8 @@ export interface SimFruit {
   kills: { victim: string; time: number; area: string }[]
   /** Its own random stream, for memory bending and noticing. */
   rng: Rng
+  /** A crew fruit's special ability, if it has one. */
+  perk: Perk | null
 }
 
 /** Things everyone knows: what was said and decided in meetings, and who has died. */
@@ -150,6 +152,10 @@ export interface Game {
   bodies: Body[]
   vision: Vision
   lightsOut: boolean
+  /** A meltdown in progress: the Rotten win if it is not stopped by then. */
+  meltdown: { until: number } | null
+  /** A room whose doors are locked, and until when. */
+  locked: { room: string; until: number } | null
   sabotageReadyAt: number
   buttonReadyAt: number
   meeting: MeetingState | null
@@ -250,8 +256,17 @@ export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Gam
       hurryUntil: 0,
       kills: [],
       rng: base.fork(`fruit:${def.id}`),
+      perk: null,
     }
   })
+  // Stretch roles: a few crew get a perk. Only drawn when asked for, so games without perks are
+  // exactly the same as before they existed.
+  if (fullRules.engineers + fullRules.scientists > 0) {
+    const perks = makeRng(seed).fork('perks')
+    const crewIds = perks.shuffle(fruits.filter((f) => f.role === 'crew').map((f) => f.id))
+    crewIds.slice(0, fullRules.engineers).forEach((id) => (fruits.find((f) => f.id === id)!.perk = 'engineer'))
+    crewIds.slice(fullRules.engineers, fullRules.engineers + fullRules.scientists).forEach((id) => (fruits.find((f) => f.id === id)!.perk = 'scientist'))
+  }
 
   const setup: ReplaySetup = { seed, roster: defs, rules: fullRules, brains: { crew: brains?.crew ?? 'heuristic', rotten: brains?.rotten ?? 'heuristic' } }
   const game: Game = {
@@ -268,6 +283,8 @@ export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Gam
     bodies: [],
     vision: emptyVision(),
     lightsOut: false,
+    meltdown: null,
+    locked: null,
     sabotageReadyAt: 20,
     buttonReadyAt: BUTTON_COOLDOWN,
     meeting: null,
@@ -351,8 +368,9 @@ export function step(game: Game) {
   for (const f of game.fruits) {
     if (game.time >= f.decideAt && (f.alive || (f.role === 'crew' && game.rules.ghostTasks)) && game.phase === 'roam') decide(game, f)
   }
-  // 6. Work, kills, reports, vents and sabotage.
+  // 6. Work, kills, reports, vents and sabotage, then the sabotage timers.
   resolveActions(game)
+  sabotageTimers(game)
   // 7. Win check.
   checkWin(game)
   game.tick++

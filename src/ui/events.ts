@@ -91,7 +91,7 @@ export function syncFruits(game: Game) {
   const fruits = uiFruits(game).map((f) => (f.id === ejecting ? { ...f, alive: true } : f))
   // Vote crosses stay up for the ejection, then clear once roaming starts again.
   const clearVotes = game.phase === 'roam' && !ejecting && Object.keys(votes).length > 0
-  useSim.setState({ fruits, taskBar: taskBar(game), phase: game.phase, lightsOut: game.lightsOut, ...(clearVotes ? { votes: {} } : {}) })
+  useSim.setState({ fruits, taskBar: taskBar(game), phase: game.phase, lightsOut: game.lightsOut, meltdownAt: game.meltdown?.until ?? null, lockedRoom: game.locked?.room ?? null, ...(clearVotes ? { votes: {} } : {}) })
 }
 
 export function attach(game: Game) {
@@ -172,14 +172,35 @@ function handle(game: Game, e: SimEvent) {
       break
     }
     case 'sabotage':
-      useSim.setState({ lightsOut: true })
-      card('LIGHTS OUT', `${n(e.who)} cut the power`, true)
-      sfx(powerDown)
-      feed({ t: e.t, tab: 'system', text: `${n(e.who)} turned the lights off.` })
+      if (e.what === 'lights') {
+        useSim.setState({ lightsOut: true })
+        card('LIGHTS OUT', `${n(e.who)} cut the power`, true)
+        sfx(powerDown)
+        feed({ t: e.t, tab: 'system', text: `${n(e.who)} turned the lights off.` })
+      } else if (e.what === 'meltdown') {
+        useSim.setState({ meltdownAt: game.meltdown?.until ?? null })
+        card('MELTDOWN', 'Hold both panels in the Ripening Chamber!', true)
+        sfx(alarm)
+        feed({ t: e.t, tab: 'system', text: `${n(e.who)} started a meltdown in the Ripening Chamber.` })
+      } else {
+        useSim.setState({ lockedRoom: e.room ?? null })
+        sfx(clang)
+        feed({ t: e.t, tab: 'system', text: `${n(e.who)} locked the doors of ${placeName(e.room ?? '')}.` })
+      }
       break
     case 'fixed':
-      useSim.setState({ lightsOut: false })
-      feed({ t: e.t, tab: 'system', text: `${n(e.who)} fixed the lights.` })
+      if (e.what === 'lights') {
+        useSim.setState({ lightsOut: false })
+        feed({ t: e.t, tab: 'system', text: `${n(e.who)} fixed the lights.` })
+      } else if (e.what === 'meltdown') {
+        useSim.setState({ meltdownAt: null })
+        card('MELTDOWN STOPPED', 'Just in time')
+        sfx(cheer)
+        feed({ t: e.t, tab: 'system', text: `${n(e.who)} and another fruit stopped the meltdown.` })
+      } else {
+        useSim.setState({ lockedRoom: null })
+        feed({ t: e.t, tab: 'system', text: 'The doors opened again.' })
+      }
       break
     case 'chat':
       say(game, e.who, e.say, e.to)

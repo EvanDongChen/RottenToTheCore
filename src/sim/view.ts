@@ -6,7 +6,7 @@ import type { RoomId } from './map'
 import { confidence, recall } from './memory'
 import type { Sighting } from './memory'
 import type { Goal } from './mind'
-import type { FruitKind, Mood, Role, Rules, Traits, Vec2 } from './types'
+import type { FruitKind, Mood, Perk, Role, Rules, Traits, Vec2 } from './types'
 
 /**
  * The only door to what a fruit may know. A brain is handed a `FruitView` and nothing else: its
@@ -70,6 +70,12 @@ export interface FruitView {
   emergenciesLeft: number
   buttonReady: boolean
   lightsOut: boolean
+  /** Seconds left before a meltdown, if one is going. */
+  meltdownIn: number | null
+  /** A room with its doors locked right now. */
+  lockedRoom: string | null
+  /** Its own special ability, if any. */
+  perk: Perk | null
   /** Watching the Security cameras right now. */
   watchingCameras: boolean
   visible: InSight[]
@@ -101,7 +107,9 @@ function remembered(m: Sighting, now: number): Memory {
 export function viewFor(game: Game, f: SimFruit): FruitView {
   const rotten = f.role === 'rotten'
   // The Rotten know who they killed. Everyone knows about bodies they found and public deaths.
-  const knownDead = new Set([...game.publicDead, ...f.seenBodies, ...(rotten ? game.bodies.filter((b) => b.killer === f.id).map((b) => b.id) : [])])
+  // A scientist's vitals board shows every death the moment it happens.
+  const vitals = f.perk === 'scientist' ? game.fruits.filter((o) => !o.alive).map((o) => o.id) : []
+  const knownDead = new Set([...game.publicDead, ...f.seenBodies, ...vitals, ...(rotten ? game.bodies.filter((b) => b.killer === f.id).map((b) => b.id) : [])])
   const seen = game.vision.sees.get(f.id) ?? new Set<string>()
   const visible: InSight[] = []
   for (const o of game.fruits) {
@@ -127,12 +135,15 @@ export function viewFor(game: Game, f: SimFruit): FruitView {
     workSince: f.workSince,
     tasks: f.tasks.map((t) => ({ ...t })),
     killReadyIn: rotten ? Math.max(0, f.killReadyAt - game.time) : null,
-    canSabotage: rotten ? !game.lightsOut && game.time >= game.sabotageReadyAt : null,
+    canSabotage: rotten ? !game.lightsOut && !game.meltdown && !game.locked && game.time >= game.sabotageReadyAt : null,
     kills: rotten ? f.kills.map((k) => ({ ...k })) : [],
     tailedBy: [...f.mind.tailedBy],
     emergenciesLeft: f.emergencies,
     buttonReady: game.time >= game.buttonReadyAt,
     lightsOut: game.lightsOut,
+    meltdownIn: game.meltdown ? Math.max(0, game.meltdown.until - game.time) : null,
+    lockedRoom: game.locked?.room ?? null,
+    perk: f.perk,
     watchingCameras: game.vision.watching.has(f.id),
     visible,
     bodies: game.bodies.filter((b) => bodyIds.includes(b.id)).map((b) => ({ id: b.id, pos: b.pos, area: b.area })),

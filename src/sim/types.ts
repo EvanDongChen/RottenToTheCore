@@ -85,4 +85,15 @@ export interface Rules {
   confirmEjects: boolean
   /** Dead crew keep doing their tasks as ghosts, as in Among Us. Makes task wins faster. */
   ghostTasks: boolean
+  /** Stretch: the Rotten can start a meltdown in the Ripening Chamber. */
+  meltdown: boolean
+  /** Stretch: the Rotten can lock a room's doors for a while. */
+  doors: boolean
+  /** Stretch: crew who can use the vents. */
+  engineers: number
+  /** Stretch: crew with a vitals board, who know the moment anyone dies. */
+  scientists: number
 }
+
+/** A crew fruit's special ability, if it has one. */
+export type Perk = 'engineer' | 'scientist'

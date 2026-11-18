@@ -54,6 +54,10 @@ const IMPATIENCE = 40
 /** It only commits to a strike from this close. */
 const STRIKE_FROM = 3.5
 
+function isRoomId(id: string): boolean {
+  return ROOMS.some((r) => r.id === id)
+}
+
 function stationRoom(id: string): string {
   return STATIONS.find((st) => st.id === id)?.room ?? ''
 }
@@ -138,6 +142,10 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng): RoamAct
   const now = view.time
   const ready = view.killReadyIn === 0
   const crew = view.visible.filter((o) => !view.partners.includes(o.id))
+  // A meltdown, now and then, when it is far from the Ripening Chamber itself. (Only with the rule.)
+  if (view.canSabotage && view.rules.meltdown && view.area !== 'ripening' && rng.chance(0.02 + t.aggression * 0.03)) {
+    return { kind: 'sabotage', what: 'meltdown' }
+  }
   if (!ready) plan.readySince = null
   else plan.readySince ??= now
 
@@ -231,6 +239,11 @@ export function rottenRoam(view: FruitView, plan: RottenPlan, rng: Rng): RoamAct
     go(plan, 'strike', now)
     plan.target = safe.o.id
     return { kind: 'kill', who: safe.o.id }
+  }
+  // Lock the target's room first, so nobody can walk in. (Only with the doors rule.)
+  if (view.canSabotage && view.rules.doors && pick.risk <= 1.5 && pick.o.area === view.area && isRoomId(view.area) && rng.chance(0.2 + t.aggression * 0.3)) {
+    go(plan, 'sabotage', now)
+    return { kind: 'sabotage', what: 'doors', room: view.area }
   }
   // Lights out first, so a strike in the dark is safer.
   if (view.canSabotage && pick.risk <= 2.5 && rng.chance(0.25 + t.aggression * 0.3)) {
