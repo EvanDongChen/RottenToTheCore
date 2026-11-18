@@ -4,6 +4,11 @@ const GAP = 6 // pixels kept between two bubbles or tags
 const EASE = 0.2
 const STICK = 14 // a bubble ignores changes smaller than this many pixels
 const HOLD_MS = 600 // how long a lifted bubble must be clear before it comes back down
+const MOST_NAME_LIFT = 44 // name tags fan out at most about two rows (at full size; less far off)
+const MOST_BUBBLE_LIFT = 90 // a bubble climbs at most about two short bubbles; past that it overlaps, faded
+
+/** How much a tag is scaled down for distance: a lift inside it moves that much less on screen. */
+const sizeOf = (el: Element) => parseFloat((el.closest<HTMLElement>('.fruit-tag')?.style.getPropertyValue('--tag-size') ?? '') || '1')
 
 /**
  * Keeps speech and thought bubbles from covering each other. Every bubble is drawn over its
@@ -16,11 +21,15 @@ export default function BubbleLayout() {
   useEffect(() => {
     let frame = 0
     // A name is measured, but its whole tag moves, so the work bar, votes and bubble go with it.
-    const names = stacker((el, lift) => {
+    const names = stacker(MOST_NAME_LIFT, (el, lift) => {
       const tag = el.closest<HTMLElement>('.fruit-tag')
       if (tag) tag.style.translate = lift ? `0 ${-lift}px` : ''
     })
-    const bubbles = stacker((el, lift) => (el.style.transform = lift ? `translateY(${-lift}px)` : ''))
+    // A bubble sits inside its scaled tag, so its lift is scaled back up to move the right distance on screen.
+    const bubbles = stacker(MOST_BUBBLE_LIFT, (el, lift, crowded) => {
+      el.style.transform = lift ? `translateY(${-lift / sizeOf(el)}px)` : ''
+      el.style.opacity = crowded ? '0.6' : ''
+    })
 
     const tick = () => {
       frame = requestAnimationFrame(tick)
@@ -60,7 +69,7 @@ function rectOf(el: HTMLElement) {
  * screen staying put, and eases each toward its spot. `fixed` gives what else an element must not
  * sit on. `apply` moves an element up by so many pixels.
  */
-function stacker(apply: (el: HTMLElement, lift: number) => void) {
+function stacker(most: number, apply: (el: HTMLElement, lift: number, crowded: boolean) => void) {
   const lifts = new WeakMap<HTMLElement, number>()
   const settled = new WeakMap<HTMLElement, { target: number; clearSince: number }>()
   return (els: HTMLElement[], fixed: (el: HTMLElement) => Box[]) => {
@@ -104,10 +113,18 @@ function stacker(apply: (el: HTMLElement, lift: number) => void) {
       }
       settled.set(box.el, s)
 
+      // Never climb past the most: in a big crowd it is better to overlap a little than to float far off.
+      const cap = most * sizeOf(box.el)
+      const crowded = s.target > cap
+      if (crowded) s.target = cap
+      if (crowded !== box.el.classList.contains('crowded')) {
+        box.el.classList.toggle('crowded', crowded)
+        apply(box.el, box.lift, crowded)
+      }
       const next = Math.abs(s.target - box.lift) < 0.5 ? s.target : box.lift + (s.target - box.lift) * EASE
       if (next === box.lift) continue
       lifts.set(box.el, next)
-      apply(box.el, next)
+      apply(box.el, next, crowded)
     }
   }
 }

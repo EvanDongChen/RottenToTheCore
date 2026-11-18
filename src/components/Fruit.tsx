@@ -15,15 +15,11 @@ import { puff } from './Dust'
 import Emote from './Emote'
 import FruitFace from './FruitFace'
 import { idleTick, makeIdle } from './idleLife'
-import { ROLE_TAG } from './fruitLooks'
+import { ROLE_TAG, tagSize } from './fruitLooks'
 import { anchors, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
 import RichText from './RichText'
 
 // Body
-/** Name tags: full size up to this far from the camera, shrinking over the next stretch, never below the least size. */
-const TAG_NEAR = 22
-const TAG_FALLOFF = 40
-const TAG_MIN = 0.62
 const HOVER_HEIGHT = 1.0 // body centre above the ground; the legs fill the gap
 const GRAVITY = 20
 
@@ -435,11 +431,11 @@ export default function Fruit({ id }: { id: string }) {
       overlay.current.visible = !hidden
       if (tagEl.current) {
         tagEl.current.style.visibility = hidden ? 'hidden' : ''
-        // Far from the camera the tag shrinks and fades a little, so a crowd far off stays readable.
-        // The selected fruit, and anyone talking, keeps a full-size tag.
+        // Far from the camera the whole tag, bubble and all, shrinks with the scene. Quiet fruits
+        // fade a little too; the selected fruit and anyone talking stay fully opaque.
         const far = state.camera.position.distanceTo(v.pos)
         const keep = st.selected === id || !!st.speech[id]
-        const size = keep ? 1 : Math.max(TAG_MIN, Math.min(1, 1 - (far - TAG_NEAR) / TAG_FALLOFF))
+        const size = tagSize(far)
         tagEl.current.style.setProperty('--tag-size', size.toFixed(2))
         tagEl.current.style.opacity = keep ? '' : String(Math.min(1, 0.45 + size * 0.6).toFixed(2))
       }

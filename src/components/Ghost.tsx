@@ -5,7 +5,7 @@ import { MathUtils, Vector3 } from 'three'
 import type { Group, Material, Mesh } from 'three'
 import { currentGame, ghostPositions, simTargets, useSim } from '../ui/store'
 import Emote from './Emote'
-import { ROLE_TAG } from './fruitLooks'
+import { ROLE_TAG, tagSize } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, LIMB_COLOR } from './fruitShapes'
 
 const FLOAT_HEIGHT = 2.3
@@ -50,7 +50,9 @@ export default function Ghost({ id }: { id: string }) {
     })
   }, [kind])
 
-  useFrame((_, delta) => {
+  const tagEl = useRef<HTMLDivElement>(null)
+
+  useFrame((state, delta) => {
     const g = group.current
     if (!g || !fruit) return
     const age = (performance.now() - born.current) / 1000
@@ -79,6 +81,7 @@ export default function Ghost({ id }: { id: string }) {
     g.rotation.set(reaction === 'sulk' ? 0.35 : 0, Math.atan2(-pos.x, -pos.z), Math.sin(age * 1.1 + phase.current) * 0.1)
     g.scale.setScalar(rise)
     ghostPositions.get(id)?.copy(g.position)
+    tagEl.current?.style.setProperty('--tag-size', tagSize(state.camera.position.distanceTo(g.position)).toFixed(2))
 
     const shape = reaction === 'cheer' ? 1 : reaction === 'sulk' ? 2 : reaction === 'gasp' ? 3 : 0
     mouths.current.forEach((mesh, i) => {
@@ -111,7 +114,7 @@ export default function Ghost({ id }: { id: string }) {
         ))}
       </group>
       <Html center position={[0, 1.15, 0]} zIndexRange={[10, 0]}>
-        <div className="fruit-tag ghost">
+        <div className="fruit-tag ghost" ref={tagEl}>
           <div className="name">
             {fruit.name}
             <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>

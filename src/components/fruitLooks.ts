@@ -21,3 +21,14 @@ export const ROLE_TAG: Record<Role, string> = {
   crew: 'Crew',
   rotten: 'Rotten',
 }
+
+/**
+ * Tags and bubbles: full size up to this far from the camera, shrinking over the next stretch,
+ * never below the least size, so a bubble keeps to the size of the fruits around it but stays readable.
+ */
+const TAG_NEAR = 22
+const TAG_FALLOFF = 40
+const TAG_MIN = 0.7
+
+/** How big a tag is drawn this far from the camera. */
+export const tagSize = (far: number) => Math.max(TAG_MIN, Math.min(1, 1 - (far - TAG_NEAR) / TAG_FALLOFF))

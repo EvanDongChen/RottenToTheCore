@@ -1533,6 +1533,8 @@ button.roster-row.on {
   gap: 9px;
   pointer-events: none;
   transform: translateY(-50%);
+  /* Set per frame from the distance to the camera. Scaling about the middle keeps the tag's foot on its fruit. */
+  scale: var(--tag-size, 1);
   width: 230px;
   font-family: var(--body);
   color: var(--ink);
@@ -1540,9 +1542,6 @@ button.roster-row.on {
 
 .fruit-tag .name {
   position: relative;
-  /* Set per frame from the distance to the camera. */
-  scale: var(--tag-size, 1);
-  transform-origin: center bottom;
   display: flex;
   align-items: center;
   gap: 5px;
