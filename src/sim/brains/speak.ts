@@ -377,8 +377,7 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
 }
 
 /** In the endgame, vote the top suspect if it is at least this likely and this far ahead of the next. */
-const ENDGAME_FLOOR = 0.2
-const ENDGAME_LEAD = 1.25
+export const ENDGAME = { floor: 0.2, lead: 1.25 }
 
 /**
  * Answering a question or an accusation. Asked about a moment: where it was then. Otherwise:
@@ -406,17 +405,21 @@ function defence(view: FruitView, meeting: MeetingView, beliefs: Record<string, 
   return { move: 'defend', target: view.id, claim: where, witness, say: fill(rng.pick(DEFEND), { room: placeName(where.room), with: withText(view, where.with) }) + (witness ? fill(rng.pick(WITNESS), { witness: n(witness) }) : '') + counter }
 }
 
-export function crewVote(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, threshold: number, tally: Record<string, number>): Ballot {
+/**
+ * `endgame` is how likely the fruit is to see that the vote can't be wasted and act on it: a
+ * thinking brain always does; a fruit of rules of thumb only if it's bold enough to vote on a guess.
+ */
+export function crewVote(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, threshold: number, tally: Record<string, number>, endgame = 1): Ballot {
   const n = nameFn(view)
   const candidates = meeting.living.filter((id) => id !== view.id)
   const [top, second] = candidates.sort((a, b) => (beliefs[b] ?? 0) - (beliefs[a] ?? 0))
   if (top && (beliefs[top] ?? 0) > threshold) return { target: top, reason: `I'm ${Math.round(beliefs[top] * 100)}% sure about ${n(top)}.` }
   // The endgame: a skip, or the wrong fruit in the Juicer, and one more kill loses it. Go with the
   // best guess, as long as it stands out at all.
-  if (top && mustVote(view, meeting.living.length)) {
+  if (top && mustVote(view, meeting.living.length) && rng.chance(endgame)) {
     const p = beliefs[top] ?? 0
     const q = second ? (beliefs[second] ?? 0) : 0
-    if (p >= ENDGAME_FLOOR && p >= q * ENDGAME_LEAD) return { target: top, reason: `We can't afford to skip. My best guess is ${n(top)}.` }
+    if (p >= ENDGAME.floor && p >= q * ENDGAME.lead) return { target: top, reason: `We can't afford to skip. My best guess is ${n(top)}.` }
   }
   // The gullible go with the crowd once it is big enough.
   const [crowd, count] = Object.entries(tally).filter(([id]) => id !== view.id).sort((a, b) => b[1] - a[1])[0] ?? []

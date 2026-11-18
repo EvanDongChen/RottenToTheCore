@@ -15,7 +15,7 @@ import type { Ballot, Brain, BrainKind, ChatContext, ChatLine, MeetingLine, Meet
  */
 
 /** Rough evidence weights, added up per fruit and squashed into 0..1. */
-const SCORE = {
+export const SCORE = {
   kill: 10,
   vented: 8,
   nearBody: 0.9,
@@ -92,7 +92,7 @@ export function heuristicBeliefs(view: FruitView): Record<string, number> {
       else if (r.open > 0.9) score += SCORE.noAlibi
     }
     // Grudges and loyalty: it knows it's crew, so whoever accused it was wrong, maybe on purpose.
-    score += Math.min(3, against[o.id] ?? 0) * SCORE.grudge * (0.4 + grudge)
+    score += Math.min(3, against[o.id] ?? 0) * SCORE.grudge * grudge
     score += Math.min(3, defenders[o.id] ?? 0) * SCORE.loyalty
     // A suspicious nature reads more into the same evidence.
     score *= 0.7 + t.suspicion * 0.6
@@ -145,7 +145,8 @@ export class HeuristicBrain implements Brain {
   async vote(view: FruitView, meeting: MeetingView): Promise<Ballot> {
     const tally = tallySoFar(view)
     if (view.role === 'rotten') return rottenVote(view, meeting, this.rng, tally)
-    return crewVote(view, meeting, this.beliefs(view), this.rng, VOTE_ABOVE, tally)
+    // Only a bold fruit votes on a hunch, even when it can see a skip might lose the game.
+    return crewVote(view, meeting, this.beliefs(view), this.rng, VOTE_ABOVE, tally, view.traits.aggression * 0.6)
   }
 }
 
