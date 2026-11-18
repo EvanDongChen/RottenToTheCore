@@ -11,6 +11,7 @@ import { puff } from './Dust'
 import { useSim } from '../ui/store'
 import MeetingTable from './MeetingTable'
 import Ballots from './Ballots'
+import BodyFlies from './BodyFlies'
 import TaskStations, { PROP_SPOTS } from './TaskStation'
 import TaskTools from './TaskTools'
 
@@ -95,6 +96,7 @@ export default function LabMap() {
 
       <MeetingTable />
       <Ballots />
+      <BodyFlies />
       <TaskStations />
       <TaskTools />
       <LockedDoors />
