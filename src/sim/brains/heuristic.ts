@@ -5,7 +5,7 @@ import type { FruitView } from '../view'
 import { crewRoam } from './crew'
 import { stockChat } from './dialog'
 import { crewSpeak, crewVote, rottenSpeak, rottenVote } from './speak'
-import type { Ballot, Brain, ChatContext, ChatLine, MeetingLine, MeetingView, RoamAction } from './types'
+import type { Ballot, Brain, BrainKind, ChatContext, ChatLine, MeetingLine, MeetingView, RoamAction } from './types'
 
 /**
  * The baseline brain: rules of thumb. Suspicion rises with what it has seen and heard, with no
@@ -64,7 +64,7 @@ export function heuristicBeliefs(view: FruitView): Record<string, number> {
 }
 
 export class HeuristicBrain implements Brain {
-  readonly kind = 'heuristic' as const
+  readonly kind: BrainKind = 'heuristic'
   protected plan: RottenPlan = newPlan()
   protected id: string
   protected rng: Rng

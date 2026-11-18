@@ -109,7 +109,7 @@ export function viewFor(game: Game, f: SimFruit): FruitView {
     visible.push({ id: o.id, pos: o.pos, area: o.area, moving: o.path.length > 0, atStation: o.working })
   }
   const bodyIds = game.vision.bodies.get(f.id) ?? []
-  return {
+  const view: Omit<FruitView, 'memory'> = {
     id: f.id,
     name: f.def.name,
     role: f.role,
@@ -138,7 +138,6 @@ export function viewFor(game: Game, f: SimFruit): FruitView {
     bodies: game.bodies.filter((b) => bodyIds.includes(b.id)).map((b) => ({ id: b.id, pos: b.pos, area: b.area })),
     foundBodies: [...f.seenBodies],
     others: game.fruits.filter((o) => o !== f).map((o) => ({ id: o.id, name: o.def.name, kind: o.def.kind, alive: !knownDead.has(o.id) })),
-    memory: f.memory.map((m) => remembered(m, game.time)),
     trail: f.trail.map((t) => ({ ...t })),
     ledger: [...f.ledger],
     mood: { ...f.mind.mood },
@@ -149,4 +148,12 @@ export function viewFor(game: Game, f: SimFruit): FruitView {
     taskBar: taskBar(game),
     meetingsHeld: game.stats.meetings,
   }
+  // The memory list is the expensive part, and many decisions never look at it: build it on first read.
+  let memory: Memory[] | null = null
+  const now = game.time
+  return Object.defineProperty(view, 'memory', {
+    enumerable: true,
+    configurable: true,
+    get: () => (memory ??= f.memory.map((m) => remembered(m, now))),
+  }) as FruitView
 }
