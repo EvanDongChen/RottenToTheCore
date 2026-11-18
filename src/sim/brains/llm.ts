@@ -388,6 +388,9 @@ export class LlmBrain extends BayesianBrain {
 
   override async speak(view: FruitView, meeting: MeetingView): Promise<MeetingLine> {
     const fallback = await super.speak(view, meeting)
+    // Backing up someone's story, or saying where it was at one moment, is a matter of memory:
+    // the rule-based answer is exactly what it remembers, so use it as is.
+    if (meeting.confirm || meeting.askedAt !== undefined) return fallback
     const prompt = [
       persona(view),
       situation(view, this.beliefs(view)),
@@ -411,7 +414,9 @@ export class LlmBrain extends BayesianBrain {
     const say = typeof out.say === 'string' && out.say.trim() ? out.say.trim().slice(0, 240) : ((repaired = true), fallback.say)
     if (repaired) this.client.usage.repaired++
     this.hallucinated(view, claim)
-    return { move, target: target ?? undefined, claim, say }
+    // A defence keeps the witness the rule-based answer named, so the story can be checked.
+    const witness = move === 'defend' && fallback.move === 'defend' ? fallback.witness : undefined
+    return { move, target: target ?? undefined, claim, say, ...(witness ? { witness } : {}) }
   }
 
   override async vote(view: FruitView, meeting: MeetingView): Promise<Ballot> {

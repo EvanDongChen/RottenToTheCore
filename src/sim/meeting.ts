@@ -39,7 +39,8 @@ interface Talk {
   bentAgainst: Set<string>
   /** How many times each fruit has spoken. */
   spoke: Map<string, number>
-  asked: { who: string; by: string } | null
+  /** Who must speak next, who asked them, and what about: a moment, or a story to back up. */
+  asked: { who: string; by: string; at?: number; confirm?: MeetingView['confirm'] } | null
 }
 
 /** Seat everyone at the table and clear the floor. */
@@ -67,7 +68,7 @@ function gather(game: Game) {
   clearChats(game)
 }
 
-export function meetingView(game: Game, step: MeetingView['step'], lines: MeetingView['lines'] = [], askedBy?: string, checks: MeetingCheck[] = []): MeetingView {
+export function meetingView(game: Game, step: MeetingView['step'], lines: MeetingView['lines'] = [], askedBy?: string, checks: MeetingCheck[] = [], ask: { at?: number; confirm?: MeetingView['confirm'] } = {}): MeetingView {
   const m = game.meeting!
   return {
     reason: m.reason,
@@ -76,6 +77,8 @@ export function meetingView(game: Game, step: MeetingView['step'], lines: Meetin
     step,
     lines: [...lines],
     askedBy,
+    askedAt: ask.at,
+    confirm: ask.confirm,
     living: game.fruits.filter((f) => f.alive).map((f) => f.id),
     checks: [...checks],
   }
@@ -115,7 +118,10 @@ export function repairLine(game: Game, speaker: SimFruit, line: MeetingLine | un
   const claim = repairClaim(game, line.claim)
   if (line.claim && !claim) repaired = true
   const say = typeof line.say === 'string' && line.say.trim() ? line.say.trim().slice(0, 240) : '…'
-  return { move, target, claim, say, repaired }
+  // A witness must be someone else at the table; a question's moment must be a time already past.
+  const witness = (move === 'defend' || move === 'alibi') && living(game, line.witness) && line.witness !== speaker.id ? line.witness : undefined
+  const at = move === 'question' && Number.isFinite(line.at) && line.at! >= 0 && line.at! <= game.time ? Math.round(line.at!) : undefined
+  return { move, target, claim, say, repaired, ...(witness ? { witness } : {}), ...(at !== undefined ? { at } : {}) }
 }
 
 /** Make a ballot legal: a living fruit other than the voter, or skip. */
@@ -133,12 +139,13 @@ function readTime(say: string) {
 /** Ask one fruit for its turn, make it legal, say it, and let everyone take it in. */
 async function turn(game: Game, talk: Talk, f: SimFruit, step: MeetingView['step'], pace: Pace) {
   const brain = game.brains.get(f.id)!
-  const askedBy = talk.asked?.who === f.id ? talk.asked.by : undefined
-  if (askedBy) talk.asked = null
+  const ask = talk.asked?.who === f.id ? talk.asked : null
+  const askedBy = ask?.by
+  if (ask) talk.asked = null
   let raw: MeetingLine | undefined
   game.onThinking?.(f.id, true)
   try {
-    raw = await brain.speak(viewFor(game, f), meetingView(game, step, talk.lines, askedBy, talk.checks.get(f.id)))
+    raw = await brain.speak(viewFor(game, f), meetingView(game, step, talk.lines, askedBy, talk.checks.get(f.id), { at: ask?.at, confirm: ask?.confirm }))
   } catch {
     raw = undefined
   }
@@ -164,7 +171,9 @@ function absorbLine(game: Game, talk: Talk, speaker: SimFruit, line: MeetingLine
   }
   if (line.move === 'defend' || line.move === 'alibi') talk.unanswered.delete(speaker.id)
   if (line.target && AGAINST.includes(line.move)) talk.unanswered.add(line.target)
-  if (line.move === 'question' && line.target) talk.asked = { who: line.target, by: speaker.id }
+  if (line.move === 'question' && line.target) talk.asked = { who: line.target, by: speaker.id, at: line.at }
+  // "Ask Kiwi": the named witness must say whether the story holds.
+  if (line.witness && line.claim?.kind === 'where') talk.asked = { who: line.witness, by: speaker.id, confirm: { who: speaker.id, claim: line.claim } }
 
   for (const l of game.fruits) {
     if (!l.alive || l === speaker) continue
@@ -280,10 +289,13 @@ async function discuss(game: Game, talk: Talk, pace: Pace) {
   }
   // 3. The open floor.
   for (let i = 0; i < game.rules.discussionTurns; i++) await turn(game, talk, pickSpeaker(game, talk), 'open', pace)
-  // 4. Last call: anyone still accused gets one final defence.
+  // Anyone still asked something answers before the last call.
+  if (talk.asked) await turn(game, talk, pickSpeaker(game, talk), 'open', pace)
+  // 4. Last call: anyone still accused gets one final defence (and a named witness its say).
   for (const id of [...talk.unanswered]) {
     const f = fruitById(game, id)
     if (f?.alive) await turn(game, talk, f, 'lastCall', pace)
+    if (talk.asked?.confirm) await turn(game, talk, pickSpeaker(game, talk), 'open', pace)
   }
 }
 

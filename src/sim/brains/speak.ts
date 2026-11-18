@@ -1,12 +1,12 @@
 import { clock, describeClaim } from '../describe'
-import { area, placeName } from '../map'
+import { area, placeName, samePlace } from '../map'
 import type { Memory } from '../view'
 import type { FruitView } from '../view'
 import { alibiFor, isCareless } from '../rotten'
 import type { Rng } from '../rng'
 import type { Role, Traits } from '../types'
 import { fill } from './dialog'
-import { mustVote } from './reasoning'
+import { mustVote, storyBreaks } from './reasoning'
 import type { Ballot, Claim, MeetingLine, MeetingView } from './types'
 
 /**
@@ -45,6 +45,16 @@ const VOUCH = ['I watched {name} do a task. {name} is clean.', '{name} is crew. 
 const SKIP = ["We don't know enough. Skip.", "Let's not guess. Skip.", 'I say we skip this one.']
 const PASS = ['Hmm.', '…', "I don't know.", 'Let me think.']
 const QUESTION = ['{name}, where were you?', 'What about you, {name}? Where were you?']
+const QUESTION_AT = ['{name}, where were you at {time}?', 'Quick one, {name}: where were you around {time}?', '{name}. {time}. Where were you?']
+const ANSWER_AT = ['At {time}? {room}{with}.', 'Around {time} I was in {room}{with}.', '{time}... {room}{with}, I think.']
+const WITNESS = [' Ask {witness}.', ' {witness} saw me.', ' {witness} can tell you.']
+const BACKED = [' {witness} already backed me up.', ' You heard {witness}.']
+const CONFIRM = ["That's right. {name} was in {room} with me.", 'I can back that up. {name} was in {room}.', 'True. I saw {name} in {room}.']
+const DENY = ["I never saw {name} in {room}. I saw them in {other}.", "Don't drag me into it. {name} was in {other}, not {room}."]
+const DENY_BLANK = ["I was in {room} then, and I didn't see {name} at all.", "{room}? I was there. No {name}."]
+const NO_MEMORY = ["I don't remember seeing {name}, sorry.", "Honestly? I can't say I saw {name}.", 'I was not paying attention, sorry.']
+const LIE_DENY = ["I never saw {name} in {room}.", "{name} wasn't with me. Nice try."]
+const STORY = ["Hold on, {name}. {when} you said you were in {room} then. Now it's {now}?", "{name}, that's not what you said {when2}. You said {room}.", "Wait. {name} said {room} before. Which is it?"]
 
 const PLEA = ['I was crew! You got it wrong!', 'No! Please! I did my tasks!', 'You will regret this. It was not me.', 'Remember me when they get you next.']
 const CURSE = ['Fools. All of you.', 'I hope the Rotten get you first.', 'Unbelievable. UNBELIEVABLE.']
@@ -93,6 +103,105 @@ export function mainStop(view: FruitView): { room: string; from: number; to: num
   if (!best) return null
   best.with = [...new Set(view.memory.filter((m) => m.kind === 'seen' && m.room === best!.room && m.from <= best!.to && m.to >= best!.from && m.now > 0.5).map((m) => m.who))].slice(0, 2)
   return best
+}
+
+/** Where the fruit was at moment `at`, from its own trail, and who it saw there then. */
+export function stopAt(view: FruitView, at: number): { room: string; from: number; to: number; with: string[] } | null {
+  const stop = view.trail.find((t) => t.from <= at + 0.5 && t.to >= at - 0.5 && t.to - t.from > 0.5)
+  if (!stop) return null
+  const from = Math.round(stop.from)
+  const to = Math.round(stop.to)
+  const seen = view.memory.filter((m) => (m.kind === 'seen' || m.kind === 'atTask') && m.room === stop.area && m.from <= to && m.to >= from && m.now > 0.5).map((m) => m.who)
+  return { room: stop.area, from, to, with: [...new Set(seen)].slice(0, 2) }
+}
+
+/** The alibi this fruit gives for one moment it was asked about: the truth for crew, a story for the Rotten. */
+export function alibiAt(view: FruitView, at: number, rng: Rng): Extract<Claim, { kind: 'where' }> | null {
+  const stop = stopAt(view, at)
+  if (!stop) return null
+  if (view.role === 'rotten') {
+    const story = alibiFor(view, stop.room, stop.from, stop.to, rng)
+    return story.kind === 'where' ? { ...story, with: story.room === stop.room ? stop.with : [] } : null
+  }
+  return { kind: 'where', ...stop }
+}
+
+/**
+ * Who to name as a witness for an alibi: someone it was with who is still alive. Crew name the
+ * one they trust most; a Rotten names its partner if it was there (who will back it up), or else
+ * anyone (who may well back it up too, if they really did see it).
+ */
+function pickWitness(view: FruitView, meeting: MeetingView, claim: Extract<Claim, { kind: 'where' }>, beliefs: Record<string, number>): string | undefined {
+  const pool = (claim.with ?? []).filter((id) => id !== view.id && meeting.living.includes(id))
+  if (!pool.length) return undefined
+  if (view.role === 'rotten') return pool.find((id) => view.partners.includes(id)) ?? pool[0]
+  return [...pool].sort((a, b) => (beliefs[a] ?? 0.5) - (beliefs[b] ?? 0.5))[0]
+}
+
+/**
+ * Named as a witness: does this fruit back up `who`'s story? Crew say what they remember: they
+ * saw it there (confirm), saw it elsewhere (deny), were there and saw nobody, or can't say. A
+ * Rotten backs its partner, and sometimes denies a true story to drop a crew fruit in it.
+ */
+export function witnessLine(view: FruitView, meeting: MeetingView, rng: Rng): MeetingLine | null {
+  const ask = meeting.confirm
+  if (!ask) return null
+  const n = nameFn(view)
+  const { who, claim } = ask
+  const room = placeName(claim.room)
+  const mine = view.memory.filter((m) => (m.kind === 'seen' || m.kind === 'atTask' || m.kind === 'passed') && m.who === who && m.from <= claim.to && m.to >= claim.from && m.now > 0.45)
+  const there = mine.find((m) => samePlace(m.room, claim.room))
+  const elsewhere = mine.find((m) => !samePlace(m.room, claim.room))
+  const me = stopAt(view, Math.round((claim.from + claim.to) / 2))
+  // Backing it up is an alibi of its own: it was there too, for as long as it saw the other.
+  const confirm = (seen = there): MeetingLine => {
+    const from = Math.round(Math.max(claim.from, seen?.from ?? me?.from ?? claim.from))
+    const to = Math.round(Math.min(claim.to, seen?.to ?? me?.to ?? claim.to))
+    return { move: 'corroborate', target: who, claim: { kind: 'where', room: claim.room, from: Math.min(from, to), to: Math.max(from, to), with: [who] }, say: fill(rng.pick(CONFIRM), { name: n(who), room }) }
+  }
+  if (view.role === 'rotten') {
+    if (view.partners.includes(who)) {
+      // Covering for a partner is only safe if it really was about there itself.
+      if (me && samePlace(me.room, claim.room)) return confirm()
+      return { move: 'pass', target: undefined, say: fill(rng.pick(NO_MEMORY), { name: n(who) }) }
+    }
+    if (rng.chance(view.traits.aggression * 0.5)) return { move: 'contradict', target: who, say: fill(rng.pick(LIE_DENY), { name: n(who), room }) }
+  }
+  if (there) return confirm()
+  if (elsewhere) {
+    const other = placeName(elsewhere.room)
+    return { move: 'contradict', target: who, claim: { kind: 'saw', what: 'seen', who, room: elsewhere.room, at: Math.round((elsewhere.from + elsewhere.to) / 2) }, say: fill(rng.pick(DENY), { name: n(who), room, other }) }
+  }
+  if (me && samePlace(me.room, claim.room)) return { move: 'pass', say: fill(rng.pick(DENY_BLANK), { name: n(who), room }) }
+  return { move: 'pass', say: fill(rng.pick(NO_MEMORY), { name: n(who) }) }
+}
+
+/**
+ * A story that changed: someone told two different stories about the same stretch of time, and
+ * this meeting is when it came out. Calls it out, unless someone already has.
+ */
+function storyCallout(view: FruitView, meeting: MeetingView, rng: Rng): MeetingLine | null {
+  const started = [...view.public].reverse().find((e) => e.kind === 'meeting')?.t ?? 0
+  const n = nameFn(view)
+  for (const [who, breaks] of storyBreaks(view)) {
+    if (who === view.id || !meeting.living.includes(who) || view.partners.includes(who)) continue
+    const fresh = breaks.find((b) => b.after.t >= started)
+    if (!fresh) continue
+    if (meeting.lines.some((l) => l.line.move === 'contradict' && l.line.target === who)) continue
+    const before = fresh.before.t < started
+    return {
+      move: 'contradict',
+      target: who,
+      say: fill(rng.pick(STORY), {
+        name: n(who),
+        room: placeName(fresh.before.claim.room),
+        now: placeName(fresh.after.claim.room),
+        when: before ? 'Last meeting' : 'A minute ago',
+        when2: before ? 'last time' : 'a minute ago',
+      }),
+    }
+  }
+  return null
 }
 
 /** The alibi this fruit gives for the run-up: the truth for crew, a story for the Rotten. */
@@ -175,6 +284,8 @@ function deed(c: Claim, n: (id: string) => string): string {
 export interface SpeakStyle {
   /** How sure it must be before it accuses. */
   accuseAbove: number
+  /** Picks the most useful question to ask, if this brain thinks that way: who, and about when. */
+  question?: (view: FruitView, meeting: MeetingView, beliefs: Record<string, number>) => { who: string; at: number } | null
 }
 
 export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, style: SpeakStyle = { accuseAbove: 0.55 }): MeetingLine {
@@ -183,6 +294,10 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
   const others = living(view, meeting)
   const top = others.map((o) => o.id).sort((a, b) => (beliefs[b] ?? 0) - (beliefs[a] ?? 0))[0]
   const hard = view.memory.find((m) => (m.kind === 'kill' || m.kind === 'vented') && m.now > 0.5 && meeting.living.includes(m.who))
+
+  // Named as a witness: back the story up, or not.
+  const witness = witnessLine(view, meeting, rng)
+  if (witness) return witness
 
   // The reporter opens.
   if (meeting.step === 'report') {
@@ -198,13 +313,11 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
     return { move: 'report', say: rng.pick(BUTTON_NOTHING) }
   }
 
-  // Asked a question, or accused: answer with where it was.
+  // Asked a question, or accused: answer with where it was, and name someone who can back it up.
   const accuser = meeting.askedBy ?? onTheSpot(view, meeting)
   if (accuser && meeting.step !== 'roundup') {
-    const where = alibi(view, rng)
     const counter = (beliefs[accuser] ?? 0) > 0.3 && t.aggression > 0.5 ? fill(rng.pick(COUNTER), { name: n(accuser) }) : ''
-    if (where) return { move: 'defend', target: view.id, claim: where, say: fill(rng.pick(DEFEND), { room: placeName(where.room), with: withText(view, where.with) }) + counter }
-    return { move: 'defend', target: view.id, say: `It wasn't me!${counter}` }
+    return defence(view, meeting, beliefs, rng, counter)
   }
 
   // Where was everyone? One location claim and the strongest observation.
@@ -218,6 +331,9 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
   }
 
   // The open floor, and the last call.
+  // A story that changed in front of everyone: call it out.
+  const story = storyCallout(view, meeting, rng)
+  if (story) return story
   // Something said earlier doesn't match what I remember: say so.
   const conflict = meeting.checks.filter((c) => c.how === 'conflict' && meeting.living.includes(c.speaker)).sort((a, b) => b.confidence - a.confidence)[0]
   if (conflict && conflict.mine.kind === 'saw') {
@@ -237,7 +353,9 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
   const match = meeting.checks.find((c) => c.how === 'match' && meeting.living.includes(c.speaker) && (beliefs[c.speaker] ?? 0) < 0.6)
   if (match && rng.chance(0.5)) return { move: 'corroborate', target: match.speaker, claim: match.mine, say: fill(rng.pick(CORROBORATE), { name: n(match.speaker), room: placeName(match.mine.room) }) }
 
-  if (top && (beliefs[top] ?? 0) > style.accuseAbove - t.suspicion * 0.1) {
+  // Said its piece about the top suspect twice already: let others talk.
+  const pressed = meeting.lines.filter((l) => l.who === view.id && l.line.target === top && ['accuse', 'bandwagon'].includes(l.line.move)).length
+  if (top && pressed < 2 && (beliefs[top] ?? 0) > style.accuseAbove - t.suspicion * 0.1) {
     const already = piled.get(top)
     if (already && already.size >= 2 && !already.has(view.id)) return { move: 'bandwagon', target: top, say: fill(rng.pick(BANDWAGON), { name: n(top) }) }
     return { move: 'accuse', target: top, say: fill(rng.pick(ACCUSE), { name: n(top), why: rng.pick(WHY[reasonAgainst(view, top)]) }) }
@@ -246,6 +364,9 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
   const crowd = [...piled.entries()].filter(([id, s]) => id !== view.id && meeting.living.includes(id) && s.size >= 2).sort((a, b) => b[1].size - a[1].size)[0]
   if (crowd && (t.temper === 'gullible' || (beliefs[crowd[0]] ?? 0) > 0.3) && !crowd[1].has(view.id)) return { move: 'bandwagon', target: crowd[0], say: fill(rng.pick(BANDWAGON), { name: n(crowd[0]) }) }
 
+  // A pointed question about the moment that matters, if this brain picks its questions.
+  const pointed = style.question?.(view, meeting, beliefs)
+  if (pointed && rng.chance(0.7)) return { move: 'question', target: pointed.who, at: pointed.at, say: fill(rng.pick(QUESTION_AT), { name: n(pointed.who), time: clock(pointed.at) }) }
   // Someone gave no alibi: ask them.
   const spoken = new Set(meeting.lines.filter((l) => l.line.claim?.kind === 'where').map((l) => l.who))
   const quiet = others.find((o) => !spoken.has(o.id))
@@ -256,6 +377,32 @@ export function crewSpeak(view: FruitView, meeting: MeetingView, beliefs: Record
 /** In the endgame, vote the top suspect if it is at least this likely and this far ahead of the next. */
 const ENDGAME_FLOOR = 0.2
 const ENDGAME_LEAD = 1.25
+
+/**
+ * Answering a question or an accusation. Asked about a moment: where it was then. Otherwise:
+ * where it spent the run-up. Either way it names a witness if it was with anyone.
+ */
+function defence(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, counter: string): MeetingLine {
+  const n = nameFn(view)
+  // Someone already backed it up this meeting: point at that rather than asking again.
+  const backer = meeting.lines.find((l) => l.line.move === 'corroborate' && l.line.target === view.id && meeting.living.includes(l.who))?.who
+  if (backer) {
+    const where = meeting.askedAt !== undefined ? alibiAt(view, meeting.askedAt, rng) : alibi(view, rng)
+    const room = where ? placeName(where.room) : ''
+    return { move: 'defend', target: view.id, claim: where ?? undefined, say: `${where ? `${room}. ` : ''}${fill(rng.pick(BACKED), { witness: n(backer) }).trim()}${counter}` }
+  }
+  if (meeting.askedAt !== undefined) {
+    const where = alibiAt(view, meeting.askedAt, rng)
+    if (where) {
+      const witness = pickWitness(view, meeting, where, beliefs)
+      return { move: 'defend', target: view.id, claim: where, witness, say: fill(rng.pick(ANSWER_AT), { time: clock(meeting.askedAt), room: placeName(where.room), with: withText(view, where.with) }) + (witness ? fill(rng.pick(WITNESS), { witness: n(witness) }) : '') + counter }
+    }
+  }
+  const where = alibi(view, rng)
+  if (!where) return { move: 'defend', target: view.id, say: `It wasn't me!${counter}` }
+  const witness = pickWitness(view, meeting, where, beliefs)
+  return { move: 'defend', target: view.id, claim: where, witness, say: fill(rng.pick(DEFEND), { room: placeName(where.room), with: withText(view, where.with) }) + (witness ? fill(rng.pick(WITNESS), { witness: n(witness) }) : '') + counter }
+}
 
 export function crewVote(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>, rng: Rng, threshold: number, tally: Record<string, number>): Ballot {
   const n = nameFn(view)
@@ -292,6 +439,8 @@ function frameTarget(view: FruitView, meeting: MeetingView, rng: Rng): string | 
 export function rottenSpeak(view: FruitView, meeting: MeetingView, rng: Rng): MeetingLine {
   const n = nameFn(view)
   const t = view.traits
+  const witness = witnessLine(view, meeting, rng)
+  if (witness) return witness
   // Self-report: a confident, detailed story pinning it on someone else.
   if (meeting.step === 'report') {
     if (meeting.body) {
@@ -307,10 +456,8 @@ export function rottenSpeak(view: FruitView, meeting: MeetingView, rng: Rng): Me
   }
   const accuser = meeting.askedBy ?? onTheSpot(view, meeting)
   if (accuser && meeting.step !== 'roundup') {
-    const where = alibi(view, rng)
     const counter = rng.chance(0.3 + t.aggression * 0.5) ? fill(rng.pick(COUNTER), { name: n(accuser) }) : ''
-    if (where) return { move: 'defend', target: view.id, claim: where, say: fill(rng.pick(DEFEND), { room: placeName(where.room), with: withText(view, where.with) }) + counter }
-    return { move: 'defend', target: view.id, say: `It wasn't me!${counter}` }
+    return defence(view, meeting, {}, rng, counter)
   }
   if (meeting.step === 'roundup') {
     const where = alibi(view, rng)

@@ -94,6 +94,10 @@ export interface MeetingLine {
   /** For display only: the structured fields drive the sim. */
   say: string
   claim?: Claim
+  /** Defending itself: a fruit who can back the story up ("ask Kiwi"). It is asked next. */
+  witness?: string
+  /** A question about one moment: "where were you at 1:20?" (sim seconds). */
+  at?: number
 }
 
 export interface Ballot {
@@ -111,6 +115,10 @@ export interface MeetingView {
   lines: { who: string; line: MeetingLine }[]
   /** Someone asked this fruit a question it must answer now. */
   askedBy?: string
+  /** The moment it was asked about, if the question named one (sim seconds). */
+  askedAt?: number
+  /** This fruit was named as a witness: does it back up `who`'s story, or not? */
+  confirm?: { who: string; claim: Extract<Claim, { kind: 'where' }> }
   living: string[]
   /**
    * What this fruit made of claims said so far, checked against its own memory: it remembers the

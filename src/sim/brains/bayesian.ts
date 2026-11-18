@@ -210,6 +210,38 @@ function pairs(view: FruitView, logOdds: Record<string, number>): Record<string,
   return p
 }
 
+/**
+ * The question worth asking: where was someone at the moment the victim most likely died? Worth
+ * most for the fruit it is least sure about (p near a half) whose whereabouts then nobody has
+ * accounted for, and who hasn't already been asked or said.
+ */
+export function bestQuestion(view: FruitView, meeting: MeetingView, beliefs: Record<string, number>): { who: string; at: number } | null {
+  if (!meeting.body) return null
+  const found = [...view.public].reverse().find((e) => e.kind === 'meeting')?.t ?? view.time
+  const body = { victim: meeting.body.victim, room: meeting.body.room, found }
+  const trust = trustScores(view)
+  const window = deathWindow(view, body, trust)
+  const at = Math.round((window[0] + window[1]) / 2)
+  const index = indexMemory(view, trust)
+  let best: { who: string; at: number } | null = null
+  let bestInfo = QUESTION_WORTH
+  for (const who of meeting.living) {
+    if (who === view.id || view.cleared.includes(who)) continue
+    const asked = meeting.lines.some((l) => (l.line.move === 'question' && l.line.target === who) || (l.who === who && l.line.claim?.kind === 'where' && l.line.claim.from <= at && l.line.claim.to >= at))
+    if (asked) continue
+    const p = beliefs[who] ?? 0
+    const info = p * (1 - p) * reachable(who, body, index, window).open
+    if (info > bestInfo) {
+      bestInfo = info
+      best = { who, at }
+    }
+  }
+  return best
+}
+
+/** Below this, no question is worth the meeting's time. */
+const QUESTION_WORTH = 0.04
+
 export class BayesianBrain extends HeuristicBrain {
   // Same roaming and Rotten behaviour as the heuristic brain; only how it reasons as crew differs.
   override readonly kind: BrainKind = 'bayesian'
@@ -228,7 +260,7 @@ export class BayesianBrain extends HeuristicBrain {
 
   override async speak(view: FruitView, meeting: MeetingView): Promise<MeetingLine> {
     if (view.role === 'rotten') return rottenSpeak(view, meeting, this.rng)
-    return crewSpeak(view, meeting, this.beliefs(view), this.rng, { accuseAbove: ACCUSE_ABOVE })
+    return crewSpeak(view, meeting, this.beliefs(view), this.rng, { accuseAbove: ACCUSE_ABOVE, question: bestQuestion })
   }
 
   override async vote(view: FruitView, meeting: MeetingView): Promise<Ballot> {
