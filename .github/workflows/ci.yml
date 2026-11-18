@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Type-check and build (tsc -b runs first).
+      - run: npm run build
+      - run: npm test
+      # Fails on any exception in 200 headless games.
+      - run: npm run sim -- --games 200 --quiet

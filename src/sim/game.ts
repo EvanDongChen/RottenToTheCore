@@ -12,3 +12,14 @@ export async function playGame(setup: GameSetup | Game, pace?: Pace): Promise<Ga
   }
   return game
 }
+
+/** Play a game forward (meetings instantly) until sim time `t`, or the end. For replays and seeking. */
+export async function fastForward(game: Game, t: number): Promise<Game> {
+  while (game.phase !== 'over' && game.time < t - 1e-9) {
+    if (game.phase === 'meeting') await runMeeting(game)
+    else step(game)
+  }
+  // Land on a roaming tick, not in the middle of a meeting that was just called.
+  if (game.phase === 'meeting') await runMeeting(game)
+  return game
+}

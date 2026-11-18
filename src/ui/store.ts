@@ -3,10 +3,11 @@ import type { Vector3 } from 'three'
 import { memoryCache, newUsage } from '../sim/brains/llm'
 import type { LlmOptions } from '../sim/brains/llm'
 import type { BrainKind } from '../sim/brains/types'
-import { createGame, taskBar } from '../sim/engine'
+import { createGame, defaultRoster, taskBar } from '../sim/engine'
+import type { ReplaySetup } from '../sim/log'
 import type { Game } from '../sim/engine'
 import { makeRng } from '../sim/rng'
-import { makeFruit, makeRoster } from '../sim/roster'
+import { makeFruit } from '../sim/roster'
 import { DEFAULT_RULES, MAX_FRUITS, MIN_FRUITS } from '../sim/rules'
 import type { FruitDef, FruitKind, Mood, Phase, Reaction, Role, Rules, Traits, Winner } from '../sim/types'
 
@@ -84,21 +85,47 @@ export function randomSeed() {
   return Math.floor(Math.random() * 1e9)
 }
 
-/** Seed, rules and roster can come from the URL, so a game can be shared and replayed exactly. */
-function urlSeed(): number | null {
+/**
+ * Seed, brains and rules can come from the URL, so a game without the LLM can be shared and
+ * played again exactly: ?seed=42&crew=bayesian&rotten=heuristic&rules=killCooldown:30,rotten:2
+ */
+function fromUrl(): { seed: number | null; patch: Partial<Settings> } {
   try {
-    const s = Number(new URLSearchParams(location.search).get('seed'))
-    return Number.isFinite(s) && s > 0 ? s : null
+    const q = new URLSearchParams(location.search)
+    const seed = Number(q.get('seed'))
+    const patch: Partial<Settings> = {}
+    const brain = (v: string | null) => (v === 'heuristic' || v === 'bayesian' || v === 'llm' ? v : undefined)
+    if (brain(q.get('crew'))) patch.crewBrain = brain(q.get('crew'))
+    if (brain(q.get('rotten'))) patch.rottenBrain = brain(q.get('rotten'))
+    const rules = q.get('rules')
+    if (rules) {
+      const r: Partial<Rules> = {}
+      for (const pair of rules.split(',')) {
+        const [k, v] = pair.split(':')
+        if (k in DEFAULT_RULES) (r as Record<string, unknown>)[k] = v === 'true' ? true : v === 'false' ? false : Number(v)
+      }
+      patch.rules = { ...DEFAULT_RULES, ...r }
+    }
+    return { seed: Number.isFinite(seed) && seed > 0 ? seed : null, patch }
   } catch {
-    return null
+    return { seed: null, patch: {} }
   }
 }
 
-const initialSettings = loadSettings()
-const initialSeed = urlSeed() ?? randomSeed()
+/** A link that plays this game again: seed, brains and any rules that differ from the defaults. */
+export function shareLink(setup: ReplaySetup): string {
+  const changed = Object.entries(setup.rules).filter(([k, v]) => DEFAULT_RULES[k as keyof Rules] !== v)
+  const q = new URLSearchParams({ seed: String(setup.seed), crew: setup.brains.crew, rotten: setup.brains.rotten })
+  if (changed.length) q.set('rules', changed.map(([k, v]) => `${k}:${v}`).join(','))
+  return `${location.origin}${location.pathname}?${q}`
+}
+
+const url = fromUrl()
+const initialSettings = { ...loadSettings(), ...url.patch }
+const initialSeed = url.seed ?? randomSeed()
 
 /** The running game. Kept outside React state: the clock advances it in place. */
-let game: Game = createGame({ seed: initialSeed, rules: initialSettings.rules })
+let game: Game = createGame({ seed: initialSeed, rules: { ...initialSettings.rules, killCooldown: 1e9, emergencyMeetings: 0 } })
 
 export function currentGame() {
   return game
@@ -114,6 +141,27 @@ export function uiFruits(g: Game): UiFruit[] {
   })
 }
 
+/** What the director camera is drawn to right now. */
+export interface Shot {
+  kind: 'kill' | 'body' | 'vent'
+  at: [number, number]
+  /** performance.now() when it started. */
+  since: number
+  key: number
+}
+
+/** A replay being watched: the same game played again from its setup. */
+export interface Replay {
+  /** Where it came from: this game, or a log file. */
+  from: 'game' | 'file'
+  /** How long the game lasts, in sim seconds, as far as is known. */
+  length: number
+  /** The hash of the loaded log, to check the replay against. */
+  expectHash?: string
+  /** Set once the replay reaches the end: whether it matched the log exactly. */
+  verified?: boolean
+}
+
 export interface Card {
   key: number
   title: string
@@ -126,6 +174,8 @@ export interface SimState {
   seed: number
   /** The roster being edited on the setup screen. */
   roster: FruitDef[]
+  /** The roster was changed by hand, so the seed alone no longer reproduces the game. */
+  rosterEdited: boolean
   fruits: UiFruit[]
   phase: Phase
   /** Sim seconds, refreshed a few times a second for the clock on screen. */
@@ -178,10 +228,18 @@ export interface SimState {
   arrows: boolean
   /** A problem with the LLM brain, shown once. */
   problem: string | null
+  shot: Shot | null
+  replay: Replay | null
+  /** Which tab of the log is open. */
+  logTab: 'all' | FeedEntry['tab']
+  /** The end-of-game recap is open. */
+  recapOpen: boolean
   sceneReady: boolean
   settings: Settings
 
   newGame(seed?: number): void
+  /** Pick a new seed on the setup screen, with that seed's own roster. */
+  reseed(seed?: number): void
   startGame(): void
   toSetup(): void
   setSettings(patch: Partial<Settings>): void
@@ -191,6 +249,8 @@ export interface SimState {
   removeFruit(id: string): void
   randomizeRoster(): void
   select(id: string | null): void
+  /** Show a game made elsewhere (a replay that was fast-forwarded), keeping the screen as it is. */
+  adoptGame(g: Game, extra?: Partial<SimState>): void
 }
 
 /** Everything about one game on screen, reset whenever a new one starts. */
@@ -214,6 +274,8 @@ function freshState(g: Game) {
     cleared: {},
     ejecting: null,
     juice: 0,
+    shot: null,
+    recapOpen: false,
     party: null,
     splats: [],
     bursts: [],
@@ -247,6 +309,14 @@ function llmOptions(s: Settings): LlmOptions | undefined {
 const gameFactory = (seed: number, s: Settings, roster?: FruitDef[]) =>
   createGame({ seed, roster, rules: { ...s.rules, fruits: roster?.length ?? s.rules.fruits }, brains: { crew: s.crewBrain, rotten: s.rottenBrain }, llm: llmOptions(s) })
 
+/** Behind the title and setup screens, the fruits go about their chores and nobody dies. */
+const DEMO_RULES: Partial<Rules> = { killCooldown: 1e9, emergencyMeetings: 0 }
+const demoGame = (seed: number, s: Settings, roster?: FruitDef[]) =>
+  createGame({ seed, roster, rules: { ...s.rules, ...DEMO_RULES, fruits: roster?.length ?? s.rules.fruits }, brains: { crew: 'heuristic', rotten: 'heuristic' } })
+
+/** The roster to pass when starting: only an edited one; otherwise the seed draws its own. */
+const rosterFor = (st: { roster: FruitDef[]; rosterEdited: boolean }) => (st.rosterEdited ? st.roster : undefined)
+
 /** Listeners told whenever a new game object replaces the old one. */
 const swapListeners = new Set<(g: Game) => void>()
 export function onGameSwap(fn: (g: Game) => void) {
@@ -261,12 +331,11 @@ export const useSim = create<SimState>((set, get) => {
     set({ ...freshState(g), ...extra })
     swapListeners.forEach((fn) => fn(g))
   }
-  const rosterFrom = (seed: number, count: number) => makeRoster(makeRng(seed).fork('setup'), count)
   return {
     ...freshState(game),
-    // The title and setup screens arrive with milestone 10; until then the game starts at once.
-    screen: 'game',
+    screen: 'title',
     roster: game.fruits.map((f) => f.def),
+    rosterEdited: false,
     selected: null,
     paused: false,
     speed: 1,
@@ -276,21 +345,34 @@ export const useSim = create<SimState>((set, get) => {
     cones: false,
     arrows: false,
     problem: null,
+    shot: null,
+    replay: null,
+    logTab: 'all',
+    recapOpen: false,
     sceneReady: false,
     settings: initialSettings,
 
     newGame: (seed = randomSeed()) => {
       const s = get().settings
-      replace(gameFactory(seed, s, get().screen === 'game' ? get().roster : undefined), { selected: null })
-      if (get().screen !== 'game') set({ roster: game.fruits.map((f) => f.def) })
+      replace(gameFactory(seed, s, rosterFor(get())), { selected: null, replay: null, recapOpen: false })
+      set({ roster: game.fruits.map((f) => f.def) })
+    },
+    reseed: (seed = randomSeed()) => {
+      const count = get().roster.length
+      set({ seed, roster: defaultRoster(seed, count), rosterEdited: false })
+      replace(demoGame(seed, get().settings, rosterFor(get())), { screen: get().screen })
     },
     startGame: () => {
       const s = get().settings
-      replace(gameFactory(get().seed, s, get().roster), { screen: 'game', selected: null, revealRoles: false, paused: false })
+      replace(gameFactory(get().seed, s, rosterFor(get())), { screen: 'game', selected: null, revealRoles: false, paused: false, replay: null, recapOpen: false })
     },
     toSetup: () => {
       const s = get().settings
-      replace(gameFactory(get().seed, s, get().roster), { screen: 'setup', selected: null })
+      // Coming from the title screen, keep the seed (it may have come from a shared link).
+      const seed = get().screen === 'title' ? get().seed : randomSeed()
+      if (!get().rosterEdited) set({ roster: defaultRoster(seed, get().roster.length) })
+      replace(demoGame(seed, s, rosterFor(get())), { screen: 'setup', selected: null, replay: null, recapOpen: false, paused: false })
+      set({ roster: get().rosterEdited ? get().roster : game.fruits.map((f) => f.def) })
     },
     setSettings: (patch) => {
       const settings = { ...get().settings, ...patch }
@@ -301,28 +383,32 @@ export const useSim = create<SimState>((set, get) => {
       const rules = { ...get().settings.rules, ...patch }
       get().setSettings({ rules })
       if (patch.fruits && patch.fruits !== get().roster.length) {
-        let roster = get().roster.slice(0, patch.fruits)
-        const rng = makeRng(randomSeed())
-        while (roster.length < patch.fruits) roster = [...roster, makeFruit(rng, roster)]
-        set({ roster })
+        if (!get().rosterEdited) set({ roster: defaultRoster(get().seed, patch.fruits) })
+        else {
+          let roster = get().roster.slice(0, patch.fruits)
+          const rng = makeRng(randomSeed())
+          while (roster.length < patch.fruits) roster = [...roster, makeFruit(rng, roster)]
+          set({ roster })
+        }
       }
     },
     updateFruit: (id, patch) =>
-      set((s) => ({ roster: s.roster.map((f) => (f.id === id ? { ...f, ...patch, traits: { ...f.traits, ...patch.traits } } : f)) })),
+      set((s) => ({ rosterEdited: true, roster: s.roster.map((f) => (f.id === id ? { ...f, ...patch, traits: { ...f.traits, ...patch.traits } } : f)) })),
     addFruit: () => {
       const roster = get().roster
       if (roster.length >= MAX_FRUITS) return
-      set({ roster: [...roster, makeFruit(makeRng(randomSeed()), roster)] })
+      set({ rosterEdited: true, roster: [...roster, makeFruit(makeRng(randomSeed()), roster)] })
       get().setSettings({ rules: { ...get().settings.rules, fruits: roster.length + 1 } })
     },
     removeFruit: (id) => {
       const roster = get().roster
       if (roster.length <= MIN_FRUITS) return
-      set({ roster: roster.filter((f) => f.id !== id) })
+      set({ rosterEdited: true, roster: roster.filter((f) => f.id !== id) })
       get().setSettings({ rules: { ...get().settings.rules, fruits: roster.length - 1 } })
     },
-    randomizeRoster: () => set({ roster: rosterFrom(randomSeed(), get().roster.length) }),
+    randomizeRoster: () => get().reseed(),
     select: (id) => set({ selected: id }),
+    adoptGame: (g, extra = {}) => replace(g, { screen: 'game', ...extra }),
   }
 })
 

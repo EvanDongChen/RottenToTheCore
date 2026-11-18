@@ -5,7 +5,7 @@ import type { Brain, BrainKind, Claim, RoamAction } from './brains/types'
 import { BUTTON_COOLDOWN, MAX_GAME_TIME, TICK, TICKS_PER_SECOND } from './constants'
 import { encounters } from './encounters'
 import { round } from './log'
-import type { SimEvent } from './log'
+import type { ReplaySetup, SimEvent } from './log'
 import { areaAt, SEAT_RING, STATIONS } from './map'
 import type { TaskLength } from './map'
 import type { Sighting } from './memory'
@@ -135,6 +135,8 @@ export interface GameStats {
 
 export interface Game {
   seed: number
+  /** How to play this exact game again. */
+  setup: ReplaySetup
   rules: Rules
   phase: Phase
   /** Sim seconds since the start. Stands still during meetings. */
@@ -201,6 +203,11 @@ function dealTasks(rng: Rng, rules: Rules): TaskState[] {
   return rng.shuffle([...pick('short', rules.shortTasks), ...pick('long', rules.longTasks)])
 }
 
+/** The roster a seed draws when none is given: the same in the browser and headless. */
+export function defaultRoster(seed: number, count: number): FruitDef[] {
+  return makeRoster(makeRng(seed).fork('roster'), count)
+}
+
 export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Game {
   const fullRules = { ...DEFAULT_RULES, ...rules }
   // Separate streams, so editing the roster never changes the game's own draws.
@@ -246,8 +253,10 @@ export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Gam
     }
   })
 
+  const setup: ReplaySetup = { seed, roster: defs, rules: fullRules, brains: { crew: brains?.crew ?? 'heuristic', rotten: brains?.rotten ?? 'heuristic' } }
   const game: Game = {
     seed,
+    setup,
     rules: fullRules,
     phase: 'roam',
     time: 0,
@@ -279,6 +288,7 @@ export function createGame({ seed, roster, rules, brains, llm }: GameSetup): Gam
     kind: 'start',
     seed,
     roster: fruits.map((f) => ({ id: f.id, name: f.def.name, kind: f.def.kind, role: f.role })),
+    setup,
   })
   logPositions(game)
   return game

@@ -166,31 +166,11 @@ export function babble(fruit: Pick<FruitDef, 'id' | 'kind' | 'traits'>, variant:
   }
 }
 
-/** The knife ringing off the doctor's protection. */
+/** A vent hatch clanking open. */
 export function clang() {
   tone(1250, 0, 0.3, 'square', 0.07, 1150)
   tone(1870, 0, 0.35, 'triangle', 0.09, 1800)
   tone(2600, 0.01, 0.2, 'sine', 0.05)
-}
-
-/** A gunshot: a crack of noise that dies away fast, over a low thump. */
-export function gunshot() {
-  if (!ctx || useSim.getState().settings.muted) return
-  const length = 0.35
-  const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * length), ctx.sampleRate)
-  const data = buffer.getChannelData(0)
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp((-i / data.length) * 9)
-  const noise = ctx.createBufferSource()
-  const filter = ctx.createBiquadFilter()
-  const amp = ctx.createGain()
-  noise.buffer = buffer
-  filter.type = 'lowpass'
-  filter.frequency.setValueAtTime(6000, ctx.currentTime)
-  filter.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + length)
-  amp.gain.value = 0.7
-  noise.connect(filter).connect(amp).connect(ctx.destination)
-  noise.start()
-  tone(160, 0, 0.3, 'sine', 0.5, 40)
 }
 
 /** A sharp intake of breath from the whole village. */
@@ -219,15 +199,26 @@ export function thud() {
   tone(140, 0, 0.35, 'sine', 0.4, 35)
 }
 
-export function nightChime() {
-  tone(330, 0, 0.9, 'sine', 0.12)
-  tone(247, 0.25, 1.1, 'sine', 0.12)
+/** A little two-note beep when a task is done. */
+export function taskBeep() {
+  tone(988, 0, 0.07, 'square', 0.025)
+  tone(1319, 0.07, 0.1, 'square', 0.025)
 }
 
-export function dawnChime() {
-  tone(392, 0, 0.5, 'triangle', 0.12)
-  tone(523, 0.18, 0.5, 'triangle', 0.12)
-  tone(659, 0.36, 0.8, 'triangle', 0.12)
+/** The emergency alarm: a rising siren, twice. */
+export function alarm() {
+  for (let i = 0; i < 2; i++) tone(520, i * 0.45, 0.4, 'sawtooth', 0.06, 980)
+}
+
+/** A body is reported: a low horn blast. */
+export function horn() {
+  tone(110, 0, 0.7, 'sawtooth', 0.08, 98)
+  tone(165, 0, 0.7, 'square', 0.035, 147)
+}
+
+/** The lights going out: a power-down whine. */
+export function powerDown() {
+  tone(700, 0, 0.6, 'sine', 0.08, 60)
 }
 
 /** Length of one beat of the party music, in milliseconds. The dancers hop in time with it. */

@@ -75,8 +75,9 @@ function browserPace(game: Game) {
 export function advance(delta: number) {
   const game = currentGame()
   const { paused, speed, time, screen } = useSim.getState()
-  // The title screen and setup show the fruits idling in the lab, without a game running.
-  const running = screen === 'game'
+  // Behind the title and setup screens a harmless demo game plays, so the lab is never still.
+  const running = true
+  void screen
 
   if (running && game.phase === 'meeting' && !meeting) {
     syncFruits(game)

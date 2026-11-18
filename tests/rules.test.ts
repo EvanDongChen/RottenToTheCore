@@ -99,3 +99,14 @@ describe('game rules', () => {
     expect(game.winner).toBe('rotten')
   })
 })
+
+describe('replays', () => {
+  it('plays the same game again from the setup in its log', async () => {
+    const { createGame: make } = await import('../src/sim/engine')
+    const first = await playGame({ seed: 21, brains: { crew: 'bayesian' } })
+    const start = first.log[0]
+    if (start.kind !== 'start') throw new Error('no start event')
+    const again = await playGame(make(start.setup))
+    expect(hashLog(again.log)).toBe(hashLog(first.log))
+  })
+})

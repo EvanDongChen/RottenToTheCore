@@ -1,6 +1,15 @@
 import type { Claim, MeetingLine } from './brains/types'
 import { hashString } from './rng'
-import type { FruitKind, Role, Vec2, Winner } from './types'
+import type { BrainKind } from './brains/types'
+import type { FruitDef, FruitKind, Role, Rules, Vec2, Winner } from './types'
+
+/** The parts of a game's setup that make it repeatable. */
+export interface ReplaySetup {
+  seed: number
+  roster: FruitDef[]
+  rules: Rules
+  brains: { crew: BrainKind; rotten: BrainKind }
+}
 
 /**
  * Everything that happened in a game, in order. It drives replays, the recap and the metrics,
@@ -8,7 +17,8 @@ import type { FruitKind, Role, Vec2, Winner } from './types'
  * roam time stands still, so meeting events share the time the meeting was called.
  */
 export type SimEvent =
-  | { t: number; kind: 'start'; seed: number; roster: { id: string; name: string; kind: FruitKind; role: Role }[] }
+  /** Everything needed to play the same game again: seed, roster, rules and brains. */
+  | { t: number; kind: 'start'; seed: number; roster: { id: string; name: string; kind: FruitKind; role: Role }[]; setup: ReplaySetup }
   /** Every living fruit's position, logged twice per sim second for replays. */
   | { t: number; kind: 'positions'; at: [id: string, x: number, z: number][] }
   | { t: number; kind: 'task'; who: string; station: string; ghost: boolean }
