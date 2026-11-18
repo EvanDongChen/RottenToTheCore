@@ -2,6 +2,7 @@ import type { Rng } from '../rng'
 import type { FruitView } from '../view'
 import { rottenRoam } from '../rotten'
 import { crewRoam } from './crew'
+import { FITTED } from './fitted'
 import { killBias, tableSuspicion } from './rottenMind'
 import { deathWindow, indexMemory, knownBodies, provenRotten, reachable, rottenLeft, storyBreaks, trustScores } from './reasoning'
 import { HeuristicBrain, tallySoFar } from './heuristic'
@@ -40,6 +41,8 @@ export const LIKELIHOOD = {
   /** Two fruits that keep backing each other up, when there are two Rotten. */
   pairBond: 1.8,
 }
+// Values fitted from headless games (`npm run calibrate`) take over from the hand-picked ones.
+Object.assign(LIKELIHOOD, FITTED)
 
 const VOTE_ABOVE = 0.55
 const ACCUSE_ABOVE = 0.5

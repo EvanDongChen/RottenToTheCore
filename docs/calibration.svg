@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 420" font-family="sans-serif" font-size="11" fill="#2a1a12">
+  <title>How well calibrated the Bayesian brain is</title>
+  <rect width="420" height="420" fill="#fffdf5"/>
+  <line x1="48" y1="372" x2="396" y2="24" stroke="#9aa4b2" stroke-dasharray="5 4"/>
+  <rect x="48" y="24" width="348" height="348" fill="none" stroke="#2a1a12"/>
+  <text x="48" y="390" text-anchor="middle">0%</text><text x="40" y="376" text-anchor="end">0%</text><text x="117.60000000000001" y="390" text-anchor="middle">20%</text><text x="40" y="306.4" text-anchor="end">20%</text><text x="187.20000000000002" y="390" text-anchor="middle">40%</text><text x="40" y="236.79999999999998" text-anchor="end">40%</text><text x="256.79999999999995" y="390" text-anchor="middle">60%</text><text x="40" y="167.20000000000002" text-anchor="end">60%</text><text x="326.40000000000003" y="390" text-anchor="middle">80%</text><text x="40" y="97.59999999999997" text-anchor="end">80%</text><text x="396" y="390" text-anchor="middle">100%</text><text x="40" y="28" text-anchor="end">100%</text>
+  <text x="222" y="412" text-anchor="middle" font-weight="bold">What it said: P(Rotten)</text>
+  <text transform="translate(12 198) rotate(-90)" text-anchor="middle" font-weight="bold">How often it was Rotten</text>
+  <polyline fill="none" stroke="#d8342c" stroke-width="2" points="63.0,364.1 99.8,333.0 132.3,283.3 167.2,228.3 202.8,167.2 237.6,135.7 273.0,116.9 308.0,79.5 342.9,56.3 388.9,26.9"/>
+  <circle cx="63.0" cy="364.1" r="12.0" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="99.8" cy="333.0" r="11.6" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="132.3" cy="283.3" r="9.5" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="167.2" cy="228.3" r="7.2" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="202.8" cy="167.2" r="6.0" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="237.6" cy="135.7" r="5.3" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="273.0" cy="116.9" r="4.8" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="308.0" cy="79.5" r="4.4" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="342.9" cy="56.3" r="4.2" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="388.9" cy="26.9" r="5.6" fill="#d8342c" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <polyline fill="none" stroke="#3d8fd6" stroke-width="2" points="58.8,362.8 100.0,321.5 131.4,286.9 167.4,239.9 202.3,199.7 238.8,168.3 273.4,146.3 308.0,133.7 343.9,87.6 387.3,33.7"/>
+  <circle cx="58.8" cy="362.8" r="12.1" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="100.0" cy="321.5" r="11.5" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="131.4" cy="286.9" r="8.6" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="167.4" cy="239.9" r="6.5" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="202.3" cy="199.7" r="5.4" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="238.8" cy="168.3" r="5.0" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="273.4" cy="146.3" r="4.8" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="308.0" cy="133.7" r="4.7" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="343.9" cy="87.6" r="4.7" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <circle cx="387.3" cy="33.7" r="5.9" fill="#3d8fd6" fill-opacity="0.75" stroke="#2a1a12" stroke-width="1.5"/>
+  <text x="58.44" y="41.400000000000034" font-weight="bold" fill="#d8342c">hand-picked</text>
+  <text x="58.44" y="56.400000000000034" font-weight="bold" fill="#3d8fd6">fitted</text>
+  <text x="256.79999999999995" y="337.2" fill="#6b7480">dashed line: perfectly calibrated</text>
+</svg>

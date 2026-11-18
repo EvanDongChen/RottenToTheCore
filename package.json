@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "node scripts/test.mjs",
     "sim": "tsx src/headless/run.ts",
-    "report": "tsx src/headless/report.ts"
+    "report": "tsx src/headless/report.ts",
+    "calibrate": "tsx src/headless/calibrate.ts"
   },
   "dependencies": {
     "@fontsource/lilita-one": "^5.3.0",
