@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>Rotten to the Core</title>
+  <!-- A two-faced apple: fresh and wide-eyed on one side, rotten and sly on the other. -->
+  <defs><clipPath id="a"><path d="M64 36 C52 25 24 27 22 56 C20 84 40 112 54 112 C58 112 61 110 64 110 C67 110 70 112 74 112 C88 112 108 84 106 56 C104 27 76 25 64 36 Z"/></clipPath></defs>
+  <path d="M64 36 C63 26 65 18 69 12" fill="none" stroke="#2a1a12" stroke-width="4.5" stroke-linecap="round"/><path d="M67 22 C76 10 94 12 98 19 C88 27 74 28 67 22 Z" fill="#4c9a3b" stroke="#2a1a12" stroke-width="4" stroke-linejoin="round"/>
+  <g clip-path="url(#a)">
+    <rect width="128" height="128" fill="#d8342c"/>
+    <path d="M64 30 L70 44 L62 56 L71 68 L61 80 L70 92 L63 104 L66 128 L128 128 L128 0 L64 0 Z" fill="#8f6233"/>
+    <circle cx="90" cy="92" r="5" fill="#6b4520"/><circle cx="82" cy="104" r="3" fill="#6b4520"/><circle cx="96" cy="50" r="3.5" fill="#6b4520"/>
+    <path d="M30 50 C32 40 40 36 46 36" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <path d="M64 36 C52 25 24 27 22 56 C20 84 40 112 54 112 C58 112 61 110 64 110 C67 110 70 112 74 112 C88 112 108 84 106 56 C104 27 76 25 64 36 Z" fill="none" stroke="#2a1a12" stroke-width="4.5" stroke-linejoin="round"/>
+  <circle cx="44" cy="64" r="9" fill="#fff" stroke="#2a1a12" stroke-width="3.5"/>
+  <circle cx="46" cy="65" r="4.2" fill="#2a1a12"/>
+  <path d="M75 63 C79 57 91 57 94 62 L94 64 C90 69 79 69 75 64 Z" fill="#fff6c4" stroke="#2a1a12" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M75 62 C80 59 90 59 95 62" fill="none" stroke="#2a1a12" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="87" cy="64" r="2.6" fill="#2a1a12"/>
+  <path d="M74 52 L95 56" stroke="#2a1a12" stroke-width="4" stroke-linecap="round"/>
+  <path d="M46 86 C56 92 72 92 86 80" fill="none" stroke="#2a1a12" stroke-width="4" stroke-linecap="round"/>
+</svg>
