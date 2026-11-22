@@ -2,6 +2,8 @@
 
 Eight fruits with stick legs do chores in a white-walled lab. One of them is Rotten, and slices the others when nobody is looking. Nobody plays: you watch, read their minds, and see the meetings fall apart.
 
+**Watch it live:** https://evandongchen.github.io/RottenToTheCore/
+
 ![A game in progress](docs/demo.gif)
 
 It's a spectator sim in the style of Among Us, built on the fruits, wobble physics and faces from [One Bad Apple](https://github.com/EvanDongChen/OneBadApple). Underneath is a deterministic tick engine that runs the same in the browser and headless in Node, three swappable brains (heuristic, Bayesian, LLM), and benchmarks over thousands of seeded games.
